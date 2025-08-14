@@ -6,6 +6,7 @@
 
 import XCTest
 import TestUtilities
+import DatadogInternal
 @testable import DatadogRUM
 @testable import DatadogCore
 @testable import DatadogObjc
@@ -56,7 +57,7 @@ class RUMDataModels_objcTests: XCTestCase {
         let expectedUserInfoAttributes: [String: Any] = mockRandomAttributes()
 
         // Given
-        var swiftAction: RUMActionEvent = .mockRandom()
+        var swiftAction: RUMActionEvent = .mockAny()
         swiftAction.context?.contextInfo = expectedContextAttributes.dd.swiftAttributes
         swiftAction.usr?.usrInfo = expectedUserInfoAttributes.dd.swiftAttributes
 

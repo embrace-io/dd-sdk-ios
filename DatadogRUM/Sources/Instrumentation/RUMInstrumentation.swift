@@ -18,17 +18,17 @@ internal final class RUMInstrumentation: RUMCommandPublisher {
     }
 
     /// Swizzles `UIViewController` for intercepting its lifecycle callbacks.
-    /// It is `nil` (no swizzling) if RUM View instrumentaiton is not enabled.
+    /// It is `nil` (no swizzling) if RUM View automatic instrumentation is not enabled.
     let viewControllerSwizzler: UIViewControllerSwizzler?
-    /// Receives interceptions from `UIViewControllerSwizzler` and from SwiftUI instrumentation.
-    /// It is non-optional as we can't know if SwiftUI instrumentation will be used or not.
+    /// Receives interceptions of both automatic and manual instrumentations.
+    /// It is non-optional as we can't know if SwiftUI manual instrumentation will be used or not.
     let viewsHandler: RUMViewsHandler
 
     /// Swizzles `UIApplication` for intercepting `UIEvents` passed to the app.
-    /// It is `nil` (no swizzling) if RUM Action instrumentaiton is not enabled.
+    /// It is `nil` (no swizzling) if RUM Action automatic instrumentation is not enabled.
     let uiApplicationSwizzler: UIApplicationSwizzler?
-    /// Receives interceptions from `UIApplicationSwizzler` and from SwiftUI instrumentation.
-    /// It is non-optional as we can't know if SwiftUI instrumentation will be used or not.
+    /// Receives interceptions of both automatic and manual instrumentations.
+    /// It is non-optional as we can't know if SwiftUI manual instrumentation will be used or not.
     let actionsHandler: RUMActionsHandling
 
     /// Instruments RUM Long Tasks. It is `nil` if long tasks tracking is not enabled.
@@ -48,6 +48,8 @@ internal final class RUMInstrumentation: RUMCommandPublisher {
         featureScope: FeatureScope,
         uiKitRUMViewsPredicate: UIKitRUMViewsPredicate?,
         uiKitRUMActionsPredicate: UIKitRUMActionsPredicate?,
+        swiftUIRUMViewsPredicate: SwiftUIRUMViewsPredicate?,
+        swiftUIRUMActionsPredicate: SwiftUIRUMActionsPredicate?,
         longTaskThreshold: TimeInterval?,
         appHangThreshold: TimeInterval?,
         mainQueue: DispatchQueue,
@@ -59,16 +61,19 @@ internal final class RUMInstrumentation: RUMCommandPublisher {
         watchdogTermination: WatchdogTerminationMonitor?,
         memoryWarningMonitor: MemoryWarningMonitor
     ) {
-        // Always create views handler (we can't know if it will be used by SwiftUI instrumentation)
-        // and only swizzle `UIViewController` if UIKit instrumentation is configured:
+        // Always create views handler (we can't know if it will be used by SwiftUI manual instrumentation)
+        // and only activate `UIViewControllerSwizzler` if automatic instrumentation for UIKit or SwiftUI is configured:
         let viewsHandler = RUMViewsHandler(
             dateProvider: dateProvider,
-            predicate: uiKitRUMViewsPredicate,
+            uiKitPredicate: uiKitRUMViewsPredicate,
+            swiftUIPredicate: swiftUIRUMViewsPredicate,
+            swiftUIViewNameExtractor: SwiftUIReflectionBasedViewNameExtractor(),
             notificationCenter: notificationCenter
         )
         let viewControllerSwizzler: UIViewControllerSwizzler? = {
             do {
-                if uiKitRUMViewsPredicate != nil {
+                // Enable event interception if either UIKit or SwiftUI automatic view tracking is enabled
+                if uiKitRUMViewsPredicate != nil || swiftUIRUMViewsPredicate != nil {
                     return try UIViewControllerSwizzler(handler: viewsHandler)
                 }
             } catch {
@@ -80,12 +85,28 @@ internal final class RUMInstrumentation: RUMCommandPublisher {
             return nil
         }()
 
-        // Always create actions handler (we can't know if it will be used by SwiftUI instrumentation)
-        // and only swizzle `UIApplicationSwizzler` if UIKit instrumentation is configured:
-        let actionsHandler = RUMActionsHandler(dateProvider: dateProvider, predicate: uiKitRUMActionsPredicate)
+        // Always create the actions handler (we can't know if it will be used by SwiftUI manual instrumentation)
+        // and only activate `UIApplicationSwizzler` if automatic instrumentation for UIKit or SwiftUI is configured
+        let actionsHandler: RUMActionsHandling = {
+            #if os(tvOS)
+            return RUMActionsHandler(
+                dateProvider: dateProvider,
+                uiKitPredicate: uiKitRUMActionsPredicate
+            )
+            #else
+            return RUMActionsHandler(
+                dateProvider: dateProvider,
+                uiKitPredicate: uiKitRUMActionsPredicate,
+                swiftUIPredicate: swiftUIRUMActionsPredicate,
+                swiftUIDetector: SwiftUIComponentFactory.createDetector()
+            )
+            #endif
+        }()
+
         let uiApplicationSwizzler: UIApplicationSwizzler? = {
             do {
-                if uiKitRUMActionsPredicate != nil {
+                // Enable event interception if either UIKit or SwiftUI automatic action tracking is enabled
+                if uiKitRUMActionsPredicate != nil || swiftUIRUMActionsPredicate != nil {
                     return try UIApplicationSwizzler(handler: actionsHandler)
                 }
             } catch {

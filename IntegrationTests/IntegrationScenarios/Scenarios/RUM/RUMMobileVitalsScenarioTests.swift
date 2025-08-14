@@ -5,19 +5,20 @@
  */
 
 import HTTPServerMock
+import TestUtilities
 import XCTest
 
 private extension ExampleApplication {
     func tapNoOpButton() {
-        buttons["No-op"].tap()
+        tapButton(titled:"No-op")
     }
 
     func tapBlockMainThreadButton() {
-        buttons["Block Main Thread"].tap()
+        tapButton(titled: "Block Main Thread")
     }
 
     func tapStartNewViewButton() {
-        buttons["Start New View"].tap()
+        tapButton(titled: "Start New View")
     }
 }
 

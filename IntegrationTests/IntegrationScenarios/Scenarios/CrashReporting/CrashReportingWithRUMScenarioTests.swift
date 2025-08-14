@@ -4,12 +4,13 @@
  * Copyright 2019-Present Datadog, Inc.
  */
 
+import TestUtilities
 import XCTest
 
 private extension ExampleApplication {
     /// Tapping this button will crash the app.
     func tapCallFatalError() {
-        buttons["Call fatalError()"].tap()
+        tapButton(titled: "Call fatalError()")
     }
 }
 

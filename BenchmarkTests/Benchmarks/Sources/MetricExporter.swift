@@ -77,13 +77,13 @@ final class MetricExporter: OpenTelemetrySdk.MetricExporter {
             return .failureNotRetryable
         }
     }
-    
+
     /// Transforms otel `Metric` to Datadog `serie`.
     ///
     /// - Parameter metric: The otel metric
     /// - Returns: The timeserie.
     func transform(_ metric: Metric) throws -> Serie {
-        var tags: Set<String> = []
+        var tags = Set(metric.resource.attributes.map { "\($0):\($1)" })
 
         let points: [Serie.Point] = try metric.data.map { data in
             let timestamp = Int64(data.timestamp.timeIntervalSince1970)
@@ -121,7 +121,7 @@ final class MetricExporter: OpenTelemetrySdk.MetricExporter {
             tags: Array(tags)
         )
     }
-    
+
     /// Submit timeseries to the Metrics intake.
     ///
     /// - Parameter series: The timeseries.

@@ -7,6 +7,8 @@
 #if os(iOS)
 import XCTest
 @_spi(Internal)
+import TestUtilities
+@_spi(Internal)
 @testable import DatadogSessionReplay
 
 class UIViewRecorderTests: XCTestCase {
@@ -61,7 +63,7 @@ class UIViewRecorderTests: XCTestCase {
     func testWhenViewHasHiddenOverride() throws {
         // Given
         viewAttributes = .mock(fixture: .visible(.someAppearance))
-        viewAttributes.overrides = .mockWith(hide: true)
+        viewAttributes.hide = true
 
         // When
         let semantics = try XCTUnwrap(recorder.semantics(of: view, with: viewAttributes, in: .mockAny()))

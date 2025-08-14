@@ -71,6 +71,7 @@ internal struct FatalErrorBuilder {
                     sessionPrecondition: lastRUMView.dd.session?.sessionPrecondition
                 )
             ),
+            account: lastRUMView.account,
             action: nil,
             application: .init(id: lastRUMView.application.id),
             buildId: lastRUMView.buildId,
@@ -144,12 +145,14 @@ internal struct FatalErrorBuilder {
         return RUMViewEvent(
             dd: .init(
                 browserSdkVersion: original.dd.browserSdkVersion,
+                cls: original.dd.cls,
                 configuration: original.dd.configuration,
                 documentVersion: original.dd.documentVersion + 1,
                 pageStates: original.dd.pageStates,
                 replayStats: original.dd.replayStats,
                 session: original.dd.session
             ),
+            account: original.account,
             application: original.application,
             buildId: original.buildId,
             buildVersion: original.buildVersion,
@@ -198,6 +201,7 @@ internal struct FatalErrorBuilder {
                 firstInputTime: original.view.firstInputTime,
                 flutterBuildTime: original.view.flutterBuildTime,
                 flutterRasterTime: original.view.flutterRasterTime,
+                freezeRate: original.view.freezeRate,
                 frozenFrame: original.view.frozenFrame,
                 frustration: original.view.frustration,
                 id: original.view.id,
@@ -223,6 +227,8 @@ internal struct FatalErrorBuilder {
                 refreshRateAverage: original.view.refreshRateAverage,
                 refreshRateMin: original.view.refreshRateMin,
                 resource: original.view.resource,
+                slowFrames: original.view.slowFrames,
+                slowFramesRate: original.view.slowFramesRate,
                 timeSpent: original.view.timeSpent,
                 url: original.view.url
             )

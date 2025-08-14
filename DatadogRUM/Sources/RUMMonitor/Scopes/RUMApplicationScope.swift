@@ -4,8 +4,8 @@
  * Copyright 2019-Present Datadog, Inc.
  */
 
-import Foundation
 import DatadogInternal
+import Foundation
 
 internal class RUMApplicationScope: RUMScope, RUMContextProvider {
     // MARK: - Child Scopes
@@ -35,6 +35,7 @@ internal class RUMApplicationScope: RUMScope, RUMContextProvider {
 
     init(dependencies: RUMScopeDependencies) {
         self.dependencies = dependencies
+
         self.context = RUMContext(
             rumApplicationID: dependencies.rumApplicationID,
             sessionID: .nullUUID,
@@ -60,7 +61,7 @@ internal class RUMApplicationScope: RUMScope, RUMContextProvider {
             createInitialSession(with: context, on: command)
 
             // If the app was started by a user (foreground & not prewarmed):
-            if context.applicationStateHistory.currentSnapshot.state == .active && context.launchTime?.isActivePrewarm == false {
+            if context.applicationStateHistory.currentSnapshot.state == .active && !context.launchTime.isActivePrewarm {
                 // Start "ApplicationLaunch" view immediatelly:
                 startApplicationLaunchView(on: command, context: context, writer: writer)
             }
@@ -148,7 +149,7 @@ internal class RUMApplicationScope: RUMScope, RUMContextProvider {
 
         var startPrecondition: RUMSessionPrecondition? = nil
 
-        if context.launchTime?.isActivePrewarm == true {
+        if context.launchTime.isActivePrewarm {
             startPrecondition = .prewarm
         } else if context.applicationStateHistory.currentSnapshot.state == .background {
             startPrecondition = .backgroundLaunch
@@ -205,8 +206,8 @@ internal class RUMApplicationScope: RUMScope, RUMContextProvider {
         }
 
         if didCreateInitialSessionCount > 0 { // Sanity check
-            // We assume this is not an initial session in the app (such is started with `RUMSDKInitCommand`:
-            dependencies.telemetry.error("Starting NEW session on due to \(type(of: command)), but initial sesison never existed")
+            // This is a non-initial session (initial sessions are created via `RUMSDKInitCommand`)
+            dependencies.telemetry.debug("Starting new session triggered by \(type(of: command)). Previous session was stopped for the following reason: \(startPrecondition?.rawValue ?? "unknown")")
         }
 
         let resumingViewScope = command is RUMStartViewCommand ? nil : lastActiveView
@@ -247,6 +248,7 @@ internal class RUMApplicationScope: RUMScope, RUMContextProvider {
         _ = process(
             command: RUMApplicationStartCommand(
                 time: command.time,
+                globalAttributes: command.globalAttributes,
                 attributes: command.attributes
             ),
             context: context,

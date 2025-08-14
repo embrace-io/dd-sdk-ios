@@ -5,13 +5,13 @@
  */
 
 import XCTest
-import TestUtilities
 import DatadogInternal
 
 @testable import DatadogTrace
 @testable import DatadogLogs
 @testable import DatadogCore
 @testable import DatadogRUM
+@testable import TestUtilities
 
 // swiftlint:disable multiline_arguments_brackets
 class TracerTests: XCTestCase {
@@ -24,8 +24,8 @@ class TracerTests: XCTestCase {
         config = Trace.Configuration()
     }
 
-    override func tearDown() {
-        core.flushAndTearDown()
+        override func tearDownWithError() throws {
+        try core.flushAndTearDown()
         core = nil
         config = nil
         super.tearDown()
@@ -65,7 +65,6 @@ class TracerTests: XCTestCase {
         {
           "spans": [
             {
-              "_dd.agent_psr": 1,
               "trace_id": "64",
               "span_id": "64",
               "parent_id": "0",
@@ -90,6 +89,7 @@ class TracerTests: XCTestCase {
               "meta._dd.source": "abc",
               "metrics._top_level": 1,
               "metrics._sampling_priority_v1": 1,
+              "metrics._dd.agent_psr": 1,
               "meta._dd.p.tid": "a"
             }
           ],
@@ -376,6 +376,52 @@ class TracerTests: XCTestCase {
         XCTAssertNil(try? spanMatchers[3].meta.userID())
         XCTAssertNil(try? spanMatchers[3].meta.userName())
         XCTAssertNil(try? spanMatchers[3].meta.userEmail())
+    }
+
+    // MARK: - Sending account info
+
+    func testSendingAccountInfo() throws {
+        core.context = .mockWith(
+            accountInfo: nil
+        )
+
+        Trace.enable(with: config, in: core)
+        let tracer = Tracer.shared(in: core).dd
+
+        tracer.startSpan(operationName: "span with no account info").finish()
+
+        core.context.accountInfo = AccountInfo(id: "abc-123", name: "Foo", extraInfo: [:])
+        tracer.startSpan(operationName: "span with account `id` and `name`").finish()
+
+        core.context.accountInfo = AccountInfo(
+            id: "abc-123",
+            name: "Foo",
+            extraInfo: [
+                "str": "value",
+                "int": 11_235,
+                "bool": true
+            ]
+        )
+        tracer.startSpan(operationName: "span with account `id`, `name`, `email` and `extraInfo`").finish()
+
+        core.context.accountInfo = nil
+        tracer.startSpan(operationName: "span with no account info").finish()
+
+        let spanMatchers = try core.waitAndReturnSpanMatchers()
+        XCTAssertNil(try? spanMatchers[0].meta.accountID())
+        XCTAssertNil(try? spanMatchers[0].meta.accountName())
+
+        XCTAssertEqual(try spanMatchers[1].meta.accountID(), "abc-123")
+        XCTAssertEqual(try spanMatchers[1].meta.accountName(), "Foo")
+
+        XCTAssertEqual(try spanMatchers[2].meta.accountID(), "abc-123")
+        XCTAssertEqual(try spanMatchers[2].meta.accountName(), "Foo")
+        XCTAssertEqual(try spanMatchers[2].meta.custom(keyPath: "meta.account.str"), "value")
+        XCTAssertEqual(try spanMatchers[2].meta.custom(keyPath: "meta.account.int"), "11235")
+        XCTAssertEqual(try spanMatchers[2].meta.custom(keyPath: "meta.account.bool"), "true")
+
+        XCTAssertNil(try? spanMatchers[3].meta.accountID())
+        XCTAssertNil(try? spanMatchers[3].meta.accountName())
     }
 
     // MARK: - Sending carrier info
@@ -901,7 +947,7 @@ class TracerTests: XCTestCase {
     // MARK: - Usage errors
 
     func testGivenSDKNotInitialized_whenObtainingSharedTracer_itPrintsError() {
-        let printFunction = PrintFunctionMock()
+        let printFunction = PrintFunctionSpy()
         consolePrint = printFunction.print
         defer { consolePrint = { message, _ in print(message) } }
 
@@ -921,7 +967,7 @@ class TracerTests: XCTestCase {
     }
 
     func testGivenTraceNotEnabled_whenObtainingSharedTracer_itPrintsError() {
-        let printFunction = PrintFunctionMock()
+        let printFunction = PrintFunctionSpy()
         consolePrint = printFunction.print
         defer { consolePrint = { message, _ in print(message) } }
 

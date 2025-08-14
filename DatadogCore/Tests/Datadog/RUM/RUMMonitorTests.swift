@@ -20,11 +20,11 @@ class RUMMonitorTests: XCTestCase {
     override func setUp() {
         super.setUp()
         core = DatadogCoreProxy()
-        config = RUM.Configuration(applicationID: .mockAny())
+        config = RUM.Configuration(applicationID: .mockAny(), trackAnonymousUser: false)
     }
 
-    override func tearDown() {
-        core.flushAndTearDown()
+        override func tearDownWithError() throws {
+        try core.flushAndTearDown()
         core = nil
         config = nil
         super.tearDown()
@@ -612,20 +612,52 @@ class RUMMonitorTests: XCTestCase {
             }
     }
 
+    func testStartingView_thenSendingActionEvents() throws {
+        config.dateProvider = RelativeDateProvider(startingFrom: Date(), advancingBySeconds: 1)
+        RUM.enable(with: config, in: core)
+
+        let monitor = RUMMonitor.shared(in: core)
+
+        monitor.startView(viewController: mockView)
+
+        monitor.addAction(type: .tap, name: "tap action", attributes: ["event-attribute1": "foo1"])
+
+        monitor.startAction(type: .swipe, name: "swipe action", attributes: ["event-attribute1": "foo1"])
+        monitor.stopAction(type: .swipe, name: "swipe action", attributes: ["event-attribute2": "foo2"])
+
+        let rumEventMatchers = try core.waitAndReturnRUMEventMatchers()
+
+        let actionEvents = rumEventMatchers.filterRUMEvents(ofType: RUMActionEvent.self)
+        XCTAssertEqual(actionEvents.count, 3)
+
+        let event1Matcher = actionEvents[0]
+        let event1: RUMActionEvent = try event1Matcher.model()
+        XCTAssertEqual(event1.action.type, .applicationStart)
+
+        let event2Matcher = actionEvents[1]
+        let event2: RUMActionEvent = try event2Matcher.model()
+        XCTAssertEqual(event2.action.type, .tap)
+        XCTAssertEqual(try event2Matcher.attribute(forKeyPath: "context.event-attribute1"), "foo1")
+
+        let event3Matcher = actionEvents[2]
+        let event3: RUMActionEvent = try event3Matcher.model()
+        XCTAssertEqual(event3.action.type, .swipe)
+        XCTAssertEqual(try event3Matcher.attribute(forKeyPath: "context.event-attribute1"), "foo1")
+        XCTAssertEqual(try event3Matcher.attribute(forKeyPath: "context.event-attribute2"), "foo2")
+    }
+
     // MARK: - Sending user info
 
     func testWhenUserInfoIsProvided_itIsSendWithAllEvents() throws {
-        core.context = .mockWith(
-            userInfo: UserInfo(
-                id: "abc-123",
-                name: "Foo",
-                email: "foo@bar.com",
-                extraInfo: [
-                    "str": "value",
-                    "int": 11_235,
-                    "bool": true
-                ]
-            )
+        core.setUserInfo(
+            id: "abc-123",
+            name: "Foo",
+            email: "foo@bar.com",
+            extraInfo: [
+                "str": "value",
+                "int": 11_235,
+                "bool": true
+            ]
         )
         RUM.enable(with: config, in: core)
 
@@ -642,7 +674,7 @@ class RUMMonitorTests: XCTestCase {
         monitor.stopView(viewController: mockView)
 
         let rumEventMatchers = try core.waitAndReturnRUMEventMatchers()
-        let expectedUserInfo = RUMUser(email: "foo@bar.com", id: "abc-123", name: "Foo", usrInfo: [
+        let expectedUserInfo = RUMUser(anonymousId: nil, email: "foo@bar.com", id: "abc-123", name: "Foo", usrInfo: [
             "str": AnyEncodable("value"),
             "int": AnyEncodable(11_235),
             "bool": AnyEncodable(true)
@@ -1229,7 +1261,7 @@ class RUMMonitorTests: XCTestCase {
     // MARK: - Usage
 
     func testGivenSDKNotInitialized_whenObtainingSharedMonitor_itPrintsError() throws {
-        let printFunction = PrintFunctionMock()
+        let printFunction = PrintFunctionSpy()
         consolePrint = printFunction.print
         defer { consolePrint = { message, _ in print(message) } }
 
@@ -1248,7 +1280,7 @@ class RUMMonitorTests: XCTestCase {
     }
 
     func testGivenRUMNotEnabled_whenObtainingSharedMonitor_itPrintsError() throws {
-        let printFunction = PrintFunctionMock()
+        let printFunction = PrintFunctionSpy()
         consolePrint = printFunction.print
         defer { consolePrint = { message, _ in print(message) } }
 

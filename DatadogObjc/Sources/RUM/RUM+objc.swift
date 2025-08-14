@@ -6,8 +6,9 @@
 
 import Foundation
 import UIKit
-import DatadogInternal
 import DatadogRUM
+
+import struct DatadogInternal.AnyEncodable
 
 internal struct UIKitRUMViewsPredicateBridge: UIKitRUMViewsPredicate {
     let objcPredicate: DDUIKitRUMViewsPredicate
@@ -357,6 +358,16 @@ public class DDRUMConfiguration: NSObject {
         get { (swiftConfig.uiKitActionsPredicate as? UIKitRUMActionsPredicateBridge)?.objcPredicate as? DDUIKitRUMActionsPredicate  }
     }
 
+    @objc public var swiftUIViewsPredicate: DDSwiftUIRUMViewsPredicate? {
+        set { swiftConfig.swiftUIViewsPredicate = newValue.map { SwiftUIRUMViewsPredicateBridge(objcPredicate: $0) } }
+        get { (swiftConfig.swiftUIViewsPredicate as? SwiftUIRUMViewsPredicateBridge)?.objcPredicate }
+    }
+
+    @objc public var swiftUIActionsPredicate: DDSwiftUIRUMActionsPredicate? {
+        set { swiftConfig.swiftUIActionsPredicate = newValue.map { SwiftUIRUMActionsPredicateBridge(objcPredicate: $0) } }
+        get { (swiftConfig.swiftUIActionsPredicate as? SwiftUIRUMActionsPredicateBridge)?.objcPredicate }
+    }
+
     @objc
     public func setURLSessionTracking(_ tracking: DDRUMURLSessionTracking) {
         swiftConfig.urlSessionTracking = tracking.swiftConfig
@@ -440,6 +451,11 @@ public class DDRUMConfiguration: NSObject {
     @objc public var customEndpoint: URL? {
         set { swiftConfig.customEndpoint = newValue }
         get { swiftConfig.customEndpoint }
+    }
+
+    @objc public var trackAnonymousUser: Bool {
+        set { swiftConfig.trackAnonymousUser = newValue }
+        get { swiftConfig.trackAnonymousUser }
     }
 }
 
@@ -656,8 +672,18 @@ public class DDRUMMonitor: NSObject {
     }
 
     @objc
+    public func addAttributes(_ attributes: [String: Any]) {
+        swiftRUMMonitor.addAttributes(attributes.dd.swiftAttributes)
+    }
+
+    @objc
     public func removeAttribute(forKey key: String) {
         swiftRUMMonitor.removeAttribute(forKey: key)
+    }
+
+    @objc
+    public func removeAttributes(forKeys keys: [String]) {
+        swiftRUMMonitor.removeAttributes(forKeys: keys)
     }
 
     @objc

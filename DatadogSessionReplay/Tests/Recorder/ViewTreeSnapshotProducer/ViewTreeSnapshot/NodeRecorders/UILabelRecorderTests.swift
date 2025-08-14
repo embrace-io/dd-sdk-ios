@@ -6,9 +6,10 @@
 
 #if os(iOS)
 import XCTest
-import TestUtilities
 @_spi(Internal)
 @testable import DatadogSessionReplay
+@_spi(Internal)
+@testable import TestUtilities
 
 // swiftlint:disable opening_brace
 class UILabelRecorderTests: XCTestCase {
@@ -90,7 +91,7 @@ class UILabelRecorderTests: XCTestCase {
         // Given
         label.text = .mockRandom()
         viewAttributes = .mock(fixture: .visible())
-        viewAttributes.overrides = .mockWith(textAndInputPrivacy: .maskAll)
+        viewAttributes.textAndInputPrivacy = .maskAll
 
         // When
         let semantics = try XCTUnwrap(recorder.semantics(of: label, with: viewAttributes, in: .mockAny()) as? SpecificElement)

@@ -6,9 +6,10 @@
 
 #if os(iOS)
 import XCTest
-import TestUtilities
 @_spi(Internal)
 @testable import DatadogSessionReplay
+@_spi(Internal)
+@testable import TestUtilities
 
 // swiftlint:disable opening_brace
 class UITextFieldRecorderTests: XCTestCase {
@@ -112,7 +113,7 @@ class UITextFieldRecorderTests: XCTestCase {
         // Given
         textField.text = .mockRandom()
         viewAttributes = .mock(fixture: .visible())
-        viewAttributes.overrides = .mockWith(textAndInputPrivacy: .maskAll)
+        viewAttributes.textAndInputPrivacy = .maskAll
 
         // When
         let semantics = try XCTUnwrap(recorder.semantics(of: textField, with: viewAttributes, in: .mockAny()) as? SpecificElement)

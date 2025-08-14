@@ -110,14 +110,14 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
         let date = dateProvider.now
 
         record(event: id) { context, writer in
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             let event = TelemetryDebugEvent(
                 dd: .init(),
                 action: rum?.userActionID.map { .init(id: $0) },
                 application: rum.map { .init(id: $0.applicationID) },
                 date: date.addingTimeInterval(context.serverTimeOffset).timeIntervalSince1970.toInt64Milliseconds,
-                effectiveSampleRate: Int64(withNoOverflow: self.sampler.samplingRate),
+                effectiveSampleRate: Double(self.sampler.samplingRate),
                 experimentalFeatures: nil,
                 service: "dd-sdk-ios",
                 session: rum.map { .init(id: $0.sessionID) },
@@ -151,14 +151,14 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
         let date = dateProvider.now
 
         record(event: id) { context, writer in
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             let event = TelemetryErrorEvent(
                 dd: .init(),
                 action: rum?.userActionID.map { .init(id: $0) },
                 application: rum.map { .init(id: $0.applicationID) },
                 date: date.addingTimeInterval(context.serverTimeOffset).timeIntervalSince1970.toInt64Milliseconds,
-                effectiveSampleRate: Int64(withNoOverflow: self.sampler.samplingRate),
+                effectiveSampleRate: Double(self.sampler.samplingRate),
                 experimentalFeatures: nil,
                 service: "dd-sdk-ios",
                 session: rum.map { .init(id: $0.sessionID) },
@@ -182,14 +182,14 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
         let date = dateProvider.now
 
         self.record(event: nil) { context, writer in
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             let event = TelemetryUsageEvent(
                 dd: .init(),
                 action: rum?.userActionID.map { .init(id: $0) },
                 application: rum.map { .init(id: $0.applicationID) },
                 date: date.addingTimeInterval(context.serverTimeOffset).timeIntervalSince1970.toInt64Milliseconds,
-                effectiveSampleRate: Int64(withNoOverflow: usage.sampleRate.composed(with: self.sampler.samplingRate)),
+                effectiveSampleRate: Double(usage.sampleRate.composed(with: self.sampler.samplingRate)),
                 experimentalFeatures: nil,
                 service: "dd-sdk-ios",
                 session: rum.map { .init(id: $0.sessionID) },
@@ -222,14 +222,14 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
         let date = dateProvider.now
 
         self.record(event: "_dd.configuration") { context, writer in
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             let event = TelemetryConfigurationEvent(
                 dd: .init(),
                 action: rum?.userActionID.map { .init(id: $0) },
                 application: rum.map { .init(id: $0.applicationID) },
                 date: date.addingTimeInterval(context.serverTimeOffset).timeIntervalSince1970.toInt64Milliseconds,
-                effectiveSampleRate: Int64(withNoOverflow: self.configurationExtraSampler.samplingRate.composed(with: self.sampler.samplingRate)),
+                effectiveSampleRate: Double(self.configurationExtraSampler.samplingRate.composed(with: self.sampler.samplingRate)),
                 experimentalFeatures: nil,
                 service: "dd-sdk-ios",
                 session: rum.map { .init(id: $0.sessionID) },
@@ -252,7 +252,7 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
         let date = dateProvider.now
 
         record(event: nil) { context, writer in
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             // Override sessionID using standard `SDKMetricFields`, otherwise use current RUM session ID:
             var attributes = metric.attributes
@@ -270,7 +270,7 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
                 action: rum?.userActionID.map { .init(id: $0) },
                 application: rum.map { .init(id: $0.applicationID) },
                 date: date.addingTimeInterval(context.serverTimeOffset).timeIntervalSince1970.toInt64Milliseconds,
-                effectiveSampleRate: Int64(withNoOverflow: effectiveSampleRate),
+                effectiveSampleRate: Double(effectiveSampleRate),
                 experimentalFeatures: nil,
                 service: "dd-sdk-ios",
                 session: sessionID.map { .init(id: $0) },
@@ -296,7 +296,7 @@ internal final class TelemetryReceiver: FeatureMessageReceiver {
 
         featureScope.eventWriteContext { context, writer in
             // reset recorded events on session renewal
-            let rum = try? context.baggages[RUMFeature.name]?.decode(type: RUMCoreContext.self)
+            let rum = context.additionalContext(ofType: RUMCoreContext.self)
 
             if rum?.sessionID != self.currentSessionID {
                 self.currentSessionID = rum?.sessionID
@@ -336,6 +336,8 @@ private extension TelemetryUsageEvent.Telemetry.Usage {
             self = .telemetryCommonFeaturesUsage(value: .setGlobalContext(value: .init()))
         case .setUser:
             self = .telemetryCommonFeaturesUsage(value: .setUser(value: .init()))
+        case .setAccount:
+            self = .telemetryCommonFeaturesUsage(value: .setAccount(value: .init()))
         case .addFeatureFlagEvaluation:
             self = .telemetryCommonFeaturesUsage(value: .addFeatureFlagEvaluation(value: .init()))
         case .addViewLoadingTime(let viewLoadingTime):
@@ -384,6 +386,7 @@ private extension TelemetryConfigurationEvent.Telemetry.Configuration {
             forwardReports: nil,
             imagePrivacyLevel: configuration.imagePrivacyLevel,
             initializationType: nil,
+            invTimeThresholdMs: configuration.invTimeThresholdMs,
             isMainProcess: nil,
             mobileVitalsUpdatePeriod: configuration.mobileVitalsUpdatePeriod,
             premiumSampleRate: nil,
@@ -391,15 +394,19 @@ private extension TelemetryConfigurationEvent.Telemetry.Configuration {
             reactVersion: nil,
             replaySampleRate: nil,
             selectedTracingPropagators: nil,
+            sessionPersistence: nil,
             sessionReplaySampleRate: configuration.sessionReplaySampleRate,
             sessionSampleRate: configuration.sessionSampleRate,
             silentMultipleInit: nil,
             startRecordingImmediately: configuration.startRecordingImmediately,
             storeContextsAcrossPages: nil,
+            swiftuiActionTrackingEnabled: configuration.swiftUIActionTrackingEnabled,
+            swiftuiViewTrackingEnabled: configuration.swiftUIViewTrackingEnabled,
             telemetryConfigurationSampleRate: nil,
             telemetrySampleRate: configuration.telemetrySampleRate,
             telemetryUsageSampleRate: nil,
             textAndInputPrivacyLevel: configuration.textAndInputPrivacyLevel,
+            tnsTimeThresholdMs: configuration.tnsTimeThresholdMs,
             touchPrivacyLevel: configuration.touchPrivacyLevel,
             traceSampleRate: configuration.traceSampleRate,
             tracerApi: configuration.tracerAPI,
@@ -407,6 +414,7 @@ private extension TelemetryConfigurationEvent.Telemetry.Configuration {
             trackBackgroundEvents: configuration.trackBackgroundEvents,
             trackCrossPlatformLongTasks: configuration.trackCrossPlatformLongTasks,
             trackErrors: configuration.trackErrors,
+            trackFeatureFlagsForEvents: nil,
             trackFlutterPerformance: configuration.trackFlutterPerformance,
             trackFrustrations: configuration.trackFrustrations,
             // `track_interactions` is deprecated in favor of `track_user_interactions`.

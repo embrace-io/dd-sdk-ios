@@ -64,9 +64,9 @@ public enum Datadog {
             var maxBatchesPerUpload: Int {
                 switch self {
                 case .low:
-                    return 1
+                    return 5
                 case .medium:
-                    return 10
+                    return 20
                 case .high:
                     return 100
                 }
@@ -230,6 +230,9 @@ public enum Datadog {
         /// The default notification center used for subscribing to app lifecycle events and system notifications.
         internal var notificationCenter: NotificationCenter = .default
 
+        /// The default app launch handler for tracking application startup time.
+        internal var appLaunchHandler: AppLaunchHandling = AppLaunchHandler.shared
+
         /// The default application state provider for accessing [application state](https://developer.apple.com/documentation/uikit/uiapplication/state).
         internal var appStateProvider: AppStateProvider = DefaultAppStateProvider()
     }
@@ -266,10 +269,26 @@ public enum Datadog {
     /// Those will be added to logs, traces and RUM events automatically.
     ///
     /// - Parameters:
-    ///   - id: User ID, if any
+    ///   - id: Mandatory User ID
     ///   - name: Name representing the user, if any
     ///   - email: User's email, if any
     ///   - extraInfo: User's custom attributes, if any
+    public static func setUserInfo(
+        id: String,
+        name: String? = nil,
+        email: String? = nil,
+        extraInfo: [AttributeKey: AttributeValue] = [:],
+        in core: DatadogCoreProtocol = CoreRegistry.default
+    ) {
+        let core = core as? DatadogCore
+        core?.setUserInfo(
+            id: id,
+            name: name,
+            email: email,
+            extraInfo: extraInfo
+        )
+    }
+    @available(*, deprecated, message: "UserInfo id property is now mandatory.")
     public static func setUserInfo(
         id: String? = nil,
         name: String? = nil,
@@ -286,19 +305,96 @@ public enum Datadog {
         )
     }
 
-    /// Add custom attributes  to the current user information
+    /// Add custom attributes to the current user information
     ///
     /// This extra info will be added to already existing extra info that is added
     /// to  logs traces and RUM events automatically.
     ///
     /// - Parameters:
-    ///   - extraInfo: User's additionall custom attributes
+    ///   - extraInfo: User's additional custom attributes
     public static func addUserExtraInfo(
         _ extraInfo: [AttributeKey: AttributeValue?],
         in core: DatadogCoreProtocol = CoreRegistry.default
     ) {
         let core = core as? DatadogCore
         core?.addUserExtraInfo(extraInfo)
+    }
+
+    /// Clear the current user information
+    ///
+    /// User information will be `nil`
+    /// Following Logs, Traces, RUM Events will not include the user information anymore
+    ///
+    /// Any active RUM Session, active RUM View at the time of call will have their `user` attribute emptied
+    ///
+    /// If you want to retain the current `user` on the active RUM session,
+    /// you need to stop the session first by using `RUMMonitor.stopSession()`
+    ///
+    /// If you want to retain the current `user` on the active RUM views,
+    /// you need to stop the view first by using `RUMMonitor.stopView(viewController:attributes:)`
+    ///
+    public static func clearUserInfo(
+        in core: DatadogCoreProtocol = CoreRegistry.default
+    ) {
+        let core = core as? DatadogCore
+        core?.clearUserInfo()
+    }
+
+    /// Sets current account information.
+    ///
+    /// Those will be added to logs, traces and RUM events automatically.
+    ///
+    /// - Parameters:
+    ///   - id: Account ID
+    ///   - name: Name representing the account, if any
+    ///   - extraInfo: Account's custom attributes, if any
+    public static func setAccountInfo(
+        id: String,
+        name: String? = nil,
+        extraInfo: [AttributeKey: AttributeValue] = [:],
+        in core: DatadogCoreProtocol = CoreRegistry.default
+    ) {
+        let core = core as? DatadogCore
+        core?.setAccountInfo(
+            id: id,
+            name: name,
+            extraInfo: extraInfo
+        )
+    }
+
+    /// Add custom attributes to the current account information
+    ///
+    /// This extra info will be added to already existing extra info that is added
+    /// to logs traces and RUM events automatically.
+    ///
+    /// - Parameters:
+    ///   - extraInfo: User's additional custom attributes
+    public static func addAccountExtraInfo(
+        _ extraInfo: [AttributeKey: AttributeValue?],
+        in core: DatadogCoreProtocol = CoreRegistry.default
+    ) {
+        let core = core as? DatadogCore
+        core?.addAccountExtraInfo(extraInfo)
+    }
+
+    /// Clear the current account information
+    ///
+    /// Account information will be `nil`
+    /// Following Logs, Traces, RUM Events will not include the account information anymore
+    ///
+    /// Any active RUM Session, active RUM View at the time of call will have their `account` attribute emptied
+    ///
+    /// If you want to retain the current `account` on the active RUM session,
+    /// you need to stop the session first by using `RUMMonitor.stopSession()`
+    ///
+    /// If you want to retain the current `account` on the active RUM views,
+    /// you need to stop the view first by using `RUMMonitor.stopView(viewController:attributes:)`
+    ///
+    public static func clearAccountInfo(
+        in core: DatadogCoreProtocol = CoreRegistry.default
+    ) {
+        let core = core as? DatadogCore
+        core?.clearAccountInfo()
     }
 
     /// Sets the tracking consent regarding the data collection for the Datadog SDK.
@@ -494,7 +590,7 @@ extension DatadogCore {
     ) throws {
         let debug = configuration.processInfo.arguments.contains(LaunchArguments.Debug)
         if debug {
-            consolePrint("⚠️ Overriding verbosity, and upload frequency due to \(LaunchArguments.Debug) launch argument", .warn)
+            consolePrint("⚠️ Overriding verbosity, upload frequency, and sample rates due to \(LaunchArguments.Debug) launch argument", .warn)
             Datadog.verbosityLevel = .debug
         }
 
@@ -519,7 +615,8 @@ extension DatadogCore {
         let performance = PerformancePreset(
             batchSize: debug ? .small : configuration.batchSize,
             uploadFrequency: debug ? .frequent : configuration.uploadFrequency,
-            bundleType: bundleType
+            bundleType: bundleType,
+            batchProcessingLevel: configuration.batchProcessingLevel
         )
         let isRunFromExtension = bundleType == .iOSAppExtension
 
@@ -553,10 +650,12 @@ extension DatadogCore {
                 applicationVersion: applicationVersion,
                 sdkInitDate: configuration.dateProvider.now,
                 device: DeviceInfo(processInfo: configuration.processInfo),
+                locale: LocaleInfo(),
                 processInfo: configuration.processInfo,
                 dateProvider: configuration.dateProvider,
                 serverDateProvider: configuration.serverDateProvider,
                 notificationCenter: configuration.notificationCenter,
+                appLaunchHandler: configuration.appLaunchHandler,
                 appStateProvider: configuration.appStateProvider
             ),
             applicationVersion: applicationVersion,

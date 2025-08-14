@@ -51,7 +51,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/microsoft/plcrashreporter.git", from: "1.11.2"),
+        .package(url: "https://github.com/microsoft/plcrashreporter.git", from: "1.12.0"),
         .package(url: opentelemetry.url, exact: "2.0.0"),
     ],
     targets: [
@@ -66,7 +66,7 @@ let package = Package(
             resources: [
                 .copy("Resources/PrivacyInfo.xcprivacy")
             ],
-            swiftSettings: [.define("SPM_BUILD")]
+            swiftSettings: [.define("SPM_BUILD")] + internalSwiftSettings
         ),
         .target(
             name: "DatadogObjc",
@@ -75,7 +75,6 @@ let package = Package(
                 .target(name: "DatadogLogs"),
                 .target(name: "DatadogTrace"),
                 .target(name: "DatadogRUM"),
-                .target(name: "DatadogSessionReplay"),
             ],
             path: "DatadogObjc/Sources"
         ),
@@ -199,16 +198,27 @@ let package = Package(
                 .target(name: "DatadogSessionReplay"),
                 .target(name: "TestUtilities"),
             ],
-            path: "DatadogSessionReplay/Tests"
+            path: "DatadogSessionReplay/Tests",
+            resources: [
+                .process("Resources/Assets.xcassets")
+            ]
         ),
 
         .target(
             name: "TestUtilities",
             dependencies: [
+                .target(name: "DatadogCore"),
+                .target(name: "DatadogPrivate"),
                 .target(name: "DatadogInternal"),
+                .target(name: "DatadogLogs"),
+                .target(name: "DatadogRUM"),
+                .target(name: "DatadogSessionReplay"),
+                .target(name: "DatadogTrace"),
+                .target(name: "DatadogCrashReporting"),
+                .target(name: "DatadogWebViewTracking")
             ],
-            path: "TestUtilities",
-            sources: ["Mocks", "Helpers", "Matchers"]
+            path: "TestUtilities/Sources",
+            swiftSettings: [.define("SPM_BUILD")] + internalSwiftSettings
         )
     ]
 )

@@ -44,6 +44,10 @@ extension TimeInterval {
         self = Double(milliseconds) / 1_000
     }
 
+    public init(fromNanoseconds nanoseconds: Int64) {
+        self = Double(nanoseconds) / 1_000_000_000
+    }
+
     /// `TimeInterval` represented in milliseconds (capped to `.min` or `.max` respectively to its sign).
     public var toMilliseconds: UInt64 {
         let milliseconds = self * 1_000
@@ -113,5 +117,19 @@ extension FixedWidthInteger {
 extension Array {
     public subscript (safe index: Index) -> Element? {
         0 <= index && index < count ? self[index] : nil
+    }
+}
+
+// MARK: - Bundle
+
+extension Bundle {
+    /// Returns `true` when `self` represents the `SwiftUI` framework bundle.
+    public var isSwiftUI: Bool {
+        return bundleURL.lastPathComponent == "SwiftUI.framework"
+    }
+
+    /// Returns `true` when `self` represents the `UIKit` framework bundle.
+    public var isUIKit: Bool {
+        return bundleURL.lastPathComponent == "UIKitCore.framework"
     }
 }

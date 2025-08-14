@@ -105,11 +105,7 @@ internal class Monitor: RUMCommandSubscriber {
     private(set) var debugging: RUMDebugging? = nil
 
     @ReadWriteLock
-    private var attributes: [AttributeKey: AttributeValue] = [:] {
-        didSet {
-            fatalErrorContext.globalAttributes = attributes
-        }
-    }
+    private var attributes: [AttributeKey: AttributeValue] = [:]
 
     private let fatalErrorContext: FatalErrorContextNotifying
 
@@ -124,6 +120,8 @@ internal class Monitor: RUMCommandSubscriber {
     }
 
     func process(command: RUMCommand) {
+        var command = command
+        command.globalAttributes = attributes
         // process command in event context
         featureScope.eventWriteContext { [weak self] context, writer in
             guard let self = self else {
@@ -141,7 +139,7 @@ internal class Monitor: RUMCommandSubscriber {
 
         // update the core context with rum context
         featureScope.set(
-            baggage: { [weak self] () -> RUMCoreContext? in
+            context: { [weak self] () -> RUMCoreContext? in
                 guard let self = self else {
                     return nil
                 }
@@ -162,8 +160,7 @@ internal class Monitor: RUMCommandSubscriber {
                     userActionID: context.activeUserActionID?.rawValue.uuidString.lowercased(),
                     viewServerTimeOffset: self.scopes.activeSession?.viewScopes.last?.serverTimeOffset
                 )
-            },
-            forKey: RUMFeature.name
+            }
         )
     }
 
@@ -177,17 +174,16 @@ internal class Monitor: RUMCommandSubscriber {
     func transform(command: RUMCommand) -> RUMCommand {
         var mutableCommand = command
 
-        var combinedUserAttributes = attributes
-        combinedUserAttributes.merge(rumCommandAttributes: command.attributes)
-
-        if let customTimestampInMiliseconds: Int64 = combinedUserAttributes.removeValue(forKey: CrossPlatformAttributes.timestampInMilliseconds)?.dd.decode() {
-            let customTimeInterval = TimeInterval(fromMilliseconds: customTimestampInMiliseconds)
+        if let customTimestampInMilliseconds: Int64 = mutableCommand.attributes.removeValue(forKey: CrossPlatformAttributes.timestampInMilliseconds)?.dd.decode() {
+            let customTimeInterval = TimeInterval(fromMilliseconds: customTimestampInMilliseconds)
             mutableCommand.time = Date(timeIntervalSince1970: customTimeInterval)
         }
 
-        mutableCommand.attributes = combinedUserAttributes
-
         return mutableCommand
+    }
+
+    private func didUpdateAttributes() {
+        fatalErrorContext.globalAttributes = attributes
     }
 }
 
@@ -197,10 +193,24 @@ extension Monitor: RUMMonitorProtocol {
 
     func addAttribute(forKey key: AttributeKey, value: AttributeValue) {
         attributes[key] = value
+        self.didUpdateAttributes()
+    }
+
+    func addAttributes(_ attributes: [AttributeKey: AttributeValue]) {
+        self.attributes.merge(attributes) { $1 }
+        self.didUpdateAttributes()
     }
 
     func removeAttribute(forKey key: AttributeKey) {
         attributes[key] = nil
+        self.didUpdateAttributes()
+    }
+
+    func removeAttributes(forKeys keys: [AttributeKey]) {
+        _attributes.mutate { attributes in
+            keys.forEach { key in attributes.removeValue(forKey: key) }
+        }
+        self.didUpdateAttributes()
     }
 
     // MARK: - session

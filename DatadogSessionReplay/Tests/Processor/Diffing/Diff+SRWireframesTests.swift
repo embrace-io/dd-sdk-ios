@@ -6,7 +6,8 @@
 
 #if os(iOS)
 import XCTest
-@testable import TestUtilities
+@_spi(Internal)
+import TestUtilities
 @_spi(Internal)
 @testable import DatadogSessionReplay
 
@@ -260,14 +261,6 @@ extension SRWireframe {
             x: update.x ?? wireframe.x,
             y: update.y ?? wireframe.y
         )
-    }
-
-    fileprivate var shapeWireframe: SRShapeWireframe? {
-        guard case let .shapeWireframe(wireframe) = self else {
-            return nil
-        }
-
-        return wireframe
     }
 }
 #endif

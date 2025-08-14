@@ -5,9 +5,9 @@
  */
 
 import XCTest
-import TestUtilities
 import DatadogInternal
 @testable import DatadogRUM
+@testable import TestUtilities
 
 class RUMSessionScopeTests: XCTestCase {
     let context: DatadogContext = .mockAny()
@@ -342,15 +342,15 @@ class RUMSessionScopeTests: XCTestCase {
         let featureScope = FeatureScopeMock()
         let fatalErrorContext = FatalErrorContextNotifierMock()
         let randomIsInitialSession: Bool = .mockRandom()
-        let randomIsReplayBeingRecorded: Bool? = .mockRandom()
+        let randomIsReplayBeingRecorded: Bool = .mockRandom()
 
         // When
         let scope: RUMSessionScope = .mockWith(
             isInitialSession: randomIsInitialSession,
             parent: parent,
             context: .mockWith(
-                baggages: [
-                    SessionReplayDependency.hasReplay: FeatureBaggage(randomIsReplayBeingRecorded),
+                additionalContext: [
+                    SessionReplayCoreContext.HasReplay(value: randomIsReplayBeingRecorded)
                 ]
             ),
             dependencies: .mockWith(
@@ -375,7 +375,7 @@ class RUMSessionScopeTests: XCTestCase {
         let featureScope = FeatureScopeMock()
         let fatalErrorContext = FatalErrorContextNotifierMock()
         let randomIsInitialSession: Bool = .mockRandom()
-        let randomIsReplayBeingRecorded: Bool? = .mockRandom()
+        let randomIsReplayBeingRecorded: Bool = .mockRandom()
 
         // Given
         let sessionStartTime = Date()
@@ -384,8 +384,8 @@ class RUMSessionScopeTests: XCTestCase {
             parent: parent,
             startTime: sessionStartTime,
             context: .mockWith(
-                baggages: [
-                    SessionReplayDependency.hasReplay: FeatureBaggage(randomIsReplayBeingRecorded),
+                additionalContext: [
+                    SessionReplayCoreContext.HasReplay(value: randomIsReplayBeingRecorded)
                 ]
             ),
             dependencies: .mockWith(
@@ -531,7 +531,7 @@ class RUMSessionScopeTests: XCTestCase {
         let view = try XCTUnwrap(scope.viewScopes.first)
 
         // When
-        let command = RUMStopSessionCommand(time: Date())
+        let command: RUMStopSessionCommand = .mockWith(time: Date())
         let keep = scope.process(command: command, context: context, writer: writer)
 
         // Then
@@ -588,7 +588,7 @@ class RUMSessionScopeTests: XCTestCase {
         _ = scope.process(command: RUMStopSessionCommand.mockWith(time: Date()), context: context, writer: writer)
 
         // When
-        let command = RUMApplicationStartCommand(time: Date(), attributes: [:])
+        let command = RUMApplicationStartCommand(time: Date(), globalAttributes: [:], attributes: [:])
         let result = scope.process(command: command, context: context, writer: writer)
 
         // Then
@@ -598,7 +598,7 @@ class RUMSessionScopeTests: XCTestCase {
 
     // MARK: - Usage
 
-    func testGivenSessionWithNoActiveScope_whenReceivingRUMCommandOtherThanKeepSessionAliveCommand_itLogsWarning() throws {
+    func testGivenSessionWithNoActiveScope_whenReceivingRUMCommand_itLogsWarning() throws {
         func recordWarningOnReceiving(command: RUMCommand) -> String? {
             // Given
             let scope: RUMSessionScope = .mockWith(
@@ -628,9 +628,36 @@ class RUMSessionScopeTests: XCTestCase {
             with `RUMMonitor.shared().startView()` and `RUMMonitor.shared().stopView()`.
             """
         )
+    }
 
-        let keepAliveCommand = RUMKeepSessionAliveCommand(time: Date(), attributes: [:])
-        let keepAliveLog = recordWarningOnReceiving(command: keepAliveCommand)
-        XCTAssertNil(keepAliveLog, "It shouldn't log warning when receiving `RUMKeepSessionAliveCommand`")
+    func testGivenSessionWithNoActiveScope_whenReceivingSilentCommand_itDoesNotLogWarning() throws {
+        func recordWarningOnReceiving(command: RUMCommand) -> String? {
+            // Given
+            let scope: RUMSessionScope = .mockWith(
+                parent: parent,
+                startTime: Date()
+            )
+            XCTAssertEqual(scope.viewScopes.count, 0)
+
+            let dd = DD.mockWith(logger: CoreLoggerMock())
+            defer { dd.reset() }
+
+            // When
+            _ = scope.process(command: command, context: context, writer: writer)
+
+            // Then
+            XCTAssertEqual(scope.viewScopes.count, 0)
+            return dd.logger.warnLog?.message
+        }
+
+        let silentCommands: [RUMCommand] = [
+            RUMKeepSessionAliveCommand(time: Date(), attributes: [:]),
+            RUMUpdatePerformanceMetric(metric: .flutterBuildTime, value: 1.0, time: Date(), attributes: [:])
+        ]
+
+        for command in silentCommands {
+            let log = recordWarningOnReceiving(command: command)
+            XCTAssertNil(log, "It shouldn't log warning when receiving silent command: \(command)")
+        }
     }
 }

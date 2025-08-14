@@ -5,13 +5,15 @@
  */
 
 import XCTest
+
 #if !os(tvOS)
 import WebKit
 
 import TestUtilities
 @testable import DatadogRUM
 @testable import DatadogWebViewTracking
-@_spi(Internal) @testable import DatadogSessionReplay
+@_spi(Internal)
+@testable import DatadogSessionReplay
 
 class WebRecordIntegrationTests: XCTestCase {
     // swiftlint:disable implicitly_unwrapped_optional
@@ -37,9 +39,9 @@ class WebRecordIntegrationTests: XCTestCase {
         WebViewTracking.enable(webView: webView, in: core)
     }
 
-    override func tearDown() {
+    override func tearDownWithError() throws {
         WebViewTracking.disable(webView: webView)
-        core.flushAndTearDown()
+        try core.flushAndTearDown()
         core = nil
         webView = nil
         controller = nil
@@ -48,19 +50,38 @@ class WebRecordIntegrationTests: XCTestCase {
     func testWebRecordIntegration() throws {
         // Given
         let randomApplicationID: String = .mockRandom()
-        let randomUUID: UUID = .mockRandom()
+        let randomUUID: RUMUUID = .mockRandom()
         let randomBrowserViewID: UUID = .mockRandom()
 
-        SessionReplay.enable(with: SessionReplay.Configuration(replaySampleRate: 100), in: core)
+        let config = SessionReplay.Configuration(
+            replaySampleRate: 100,
+            textAndInputPrivacyLevel: .maskAll,
+            imagePrivacyLevel: .maskAll,
+            touchPrivacyLevel: .show
+        )
+        SessionReplay.enable(with: config, in: core)
         RUM.enable(with: .mockWith(applicationID: randomApplicationID) {
             $0.uuidGenerator = RUMUUIDGeneratorMock(uuid: randomUUID)
         }, in: core)
+
+        let rumBody = """
+        {
+            "eventType": "rum",
+                "event": {
+                    "date": \(1_635_932_927_012),
+                    "type": "view",
+                    "application": { "id": "\(randomApplicationID)" },
+                    "session": { "id": "\(randomUUID.toRUMDataFormat)" },
+                    "view": { "id": "\(randomBrowserViewID.uuidString.lowercased())" }
+            }
+        }
+        """
 
         let body = """
         {
             "eventType": "record",
             "event": {
-                "timestamp" : \(1635932927012),
+                "timestamp" : \(1_635_932_927_012),
                 "type": 2
             },
             "view": { "id": "\(randomBrowserViewID.uuidString.lowercased())" }
@@ -69,6 +90,9 @@ class WebRecordIntegrationTests: XCTestCase {
 
         // When
         RUMMonitor.shared(in: core).startView(key: "web-view")
+        controller.send(body: rumBody, from: webView)
+        controller.flush()
+        _ = core.waitAndReturnEventsData(ofFeature: RUMFeature.name) // Wait for context propagation
         controller.send(body: body, from: webView)
         controller.flush()
 
@@ -77,7 +101,7 @@ class WebRecordIntegrationTests: XCTestCase {
             .map { try SegmentJSON($0, source: .ios) }
         let segment = try XCTUnwrap(segments.first)
 
-        let expectedUUID = randomUUID.uuidString.lowercased()
+        let expectedUUID = randomUUID.toRUMDataFormat
         let expectedSlotID = String(webView.hash)
 
         XCTAssertEqual(segment.applicationID, randomApplicationID)
@@ -95,7 +119,7 @@ class WebRecordIntegrationTests: XCTestCase {
     func testWebRecordIntegrationWithNewSessionReplayConfigurationAPI() throws {
         // Given
         let randomApplicationID: String = .mockRandom()
-        let randomUUID: UUID = .mockRandom()
+        let randomUUID: RUMUUID = .mockRandom()
         let randomBrowserViewID: UUID = .mockRandom()
 
         SessionReplay.enable(with: SessionReplay.Configuration(
@@ -108,11 +132,24 @@ class WebRecordIntegrationTests: XCTestCase {
             $0.uuidGenerator = RUMUUIDGeneratorMock(uuid: randomUUID)
         }, in: core)
 
+        let rumBody = """
+        {
+            "eventType": "rum",
+                "event": {
+                    "date": \(1_635_932_927_012),
+                    "type": "view",
+                    "application": { "id": "\(randomApplicationID)" },
+                    "session": { "id": "\(randomUUID.toRUMDataFormat)" },
+                    "view": { "id": "\(randomBrowserViewID.uuidString.lowercased())" }
+            }
+        }
+        """
+
         let body = """
         {
             "eventType": "record",
             "event": {
-                "timestamp" : \(1635932927012),
+                "timestamp" : \(1_635_932_927_012),
                 "type": 2
             },
             "view": { "id": "\(randomBrowserViewID.uuidString.lowercased())" }
@@ -121,6 +158,9 @@ class WebRecordIntegrationTests: XCTestCase {
 
         // When
         RUMMonitor.shared(in: core).startView(key: "web-view")
+        controller.send(body: rumBody, from: webView)
+        controller.flush()
+        _ = core.waitAndReturnEventsData(ofFeature: RUMFeature.name) // Wait for context propagation
         controller.send(body: body, from: webView)
         controller.flush()
 
@@ -129,7 +169,7 @@ class WebRecordIntegrationTests: XCTestCase {
             .map { try SegmentJSON($0, source: .ios) }
         let segment = try XCTUnwrap(segments.first)
 
-        let expectedUUID = randomUUID.uuidString.lowercased()
+        let expectedUUID = randomUUID.toRUMDataFormat
         let expectedSlotID = String(webView.hash)
 
         XCTAssertEqual(segment.applicationID, randomApplicationID)

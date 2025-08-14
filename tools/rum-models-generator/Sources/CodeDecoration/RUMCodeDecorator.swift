@@ -28,6 +28,7 @@ public class RUMCodeDecorator: SwiftCodeDecorator {
                 "RUMSessionPrecondition",
                 "RUMTelemetryDevice",
                 "RUMTelemetryOperatingSystem",
+                "RUMAccount"
             ]
         )
     }
@@ -47,6 +48,15 @@ public class RUMCodeDecorator: SwiftCodeDecorator {
 
         if context.parent == nil {
             `struct`.conformance = [rumDataModelProtocol] // Conform root structs to `RUMDataModel`
+        }
+
+        // Vital has a member `description` that needs to be renamed for Obj-C
+        `struct`.properties = `struct`.properties.map {
+            var prop = $0
+            if prop.name == "description" {
+                prop.name = "\(`struct`.name.lowerCamelCased)Description"
+            }
+            return prop
         }
 
         return `struct`
@@ -137,6 +147,10 @@ public class RUMCodeDecorator: SwiftCodeDecorator {
 
         if fixedName == "SessionPrecondition" {
             fixedName = "RUMSessionPrecondition"
+        }
+
+        if fixedName == "Account" {
+            fixedName = "RUMAccount"
         }
 
         return fixedName

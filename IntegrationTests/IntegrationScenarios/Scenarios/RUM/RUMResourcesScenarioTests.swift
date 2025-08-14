@@ -4,13 +4,14 @@
  * Copyright 2019-Present Datadog, Inc.
  */
 
-import HTTPServerMock
 import DatadogInternal
+import HTTPServerMock
+import TestUtilities
 import XCTest
 
 private extension ExampleApplication {
     func tapSend3rdPartyRequests() {
-        buttons["Send 3rd party requests"].tap()
+        tapButton(titled: "Send 3rd party requests")
     }
 }
 
