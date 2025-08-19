@@ -34,6 +34,33 @@ These conflicts became a critical issue for libraries like [`Embrace`](https://g
 
 Since this fork aims to be a drop-in alternative, you can follow the [usual integration steps outlined in the primary Datadog SDK documentation](https://github.com/DataDog/dd-sdk-ios?tab=readme-ov-file#getting-started). Just ensure you point your Swift Package Manager to this fork’s repository.
 
+# **Known Issues**
+
+**Network requests missing on DataDog, but appear on the Embrace dashboard:**
+
+Due to the different approaches in handling Network Request tracing, DataDog will stop receiving events for Network Calls due to the session's delegate being internally replaced by Embrace.
+
+As a workaround, you can implement this code snippet right next to the custom delegate class you declared for use in DataDog. Do note you need to replace ```MyCustomSessionDelegate``` with the delegate class you created.
+
+```swift
+// Add this to your imports list.
+import EmbraceObjCUtilsInternal
+
+// The class you created to initialize URLSessionInstrumentation on DataDog.
+final class MyCustomSessionDelegate: NSObject, URLSessionDataDelegate { }
+
+// Add this code by replacing MyCustomSessionDelegate with the delegate class you created.
+extension EMBURLSessionDelegateProxy {
+    open override func isKind(of aClass: AnyClass) -> Bool {
+        if MyCustomSessionDelegate.isKind(of: aClass) {
+            return true
+        }
+
+        return super.isKind(of: aClass)
+    }
+}
+```
+
 # **Support and Contributions**
 
 If you run into any issues or have feature requests, feel free to open an issue or pull request. We welcome feedback and community contributions to keep this integration as smooth, efficient, and up-to-date as possible.
