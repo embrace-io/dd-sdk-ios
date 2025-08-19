@@ -9,11 +9,12 @@ import XCTest
 import DatadogInternal
 
 @_spi(Internal)
-@testable import DatadogSessionReplay
 @testable import TestUtilities
+@_spi(Internal)
+@testable import DatadogSessionReplay
 
 class SegmentRequestBuilderTests: XCTestCase {
-    private let rumContext: RUMContext = .mockRandom() // all records must reference the same RUM context
+    private let rumContext: RUMCoreContext = .mockRandom() // all records must reference the same RUM context
     private var mockEvents: [Event] {
         let records = [
             EnrichedRecord(context: .mockWith(rumContext: self.rumContext), records: .mockRandom(count: 5)),
@@ -50,6 +51,7 @@ class SegmentRequestBuilderTests: XCTestCase {
         XCTAssertEqual(try url(for: .us5), "https://browser-intake-us5-datadoghq.com/api/v2/replay")
         XCTAssertEqual(try url(for: .eu1), "https://browser-intake-datadoghq.eu/api/v2/replay")
         XCTAssertEqual(try url(for: .ap1), "https://browser-intake-ap1-datadoghq.com/api/v2/replay")
+        XCTAssertEqual(try url(for: .ap2), "https://browser-intake-ap2-datadoghq.com/api/v2/replay")
         XCTAssertEqual(try url(for: .us1_fed), "https://browser-intake-ddog-gov.com/api/v2/replay")
     }
 
@@ -71,6 +73,7 @@ class SegmentRequestBuilderTests: XCTestCase {
         XCTAssertEqual(try url(for: .us5), expectedURL)
         XCTAssertEqual(try url(for: .eu1), expectedURL)
         XCTAssertEqual(try url(for: .ap1), expectedURL)
+        XCTAssertEqual(try url(for: .ap2), expectedURL)
         XCTAssertEqual(try url(for: .us1_fed), expectedURL)
     }
 
@@ -138,8 +141,8 @@ class SegmentRequestBuilderTests: XCTestCase {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
 
-        let context0: RUMContext = .mockRandom()
-        let context1: RUMContext = .mockRandom()
+        let context0: RUMCoreContext = .mockRandom()
+        let context1: RUMCoreContext = .mockRandom()
         let events = try [
             EnrichedRecord(context: .mockWith(rumContext: context0), records: .mockRandom(count: 5)),
             EnrichedRecord(context: .mockWith(rumContext: context0), records: .mockRandom(count: 10)),

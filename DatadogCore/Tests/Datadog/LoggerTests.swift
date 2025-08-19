@@ -5,7 +5,6 @@
  */
 
 import XCTest
-import TestUtilities
 import DatadogInternal
 import OpenTelemetryApi
 
@@ -13,6 +12,7 @@ import OpenTelemetryApi
 @testable import DatadogTrace
 @testable import DatadogRUM
 @testable import DatadogCore
+@testable import TestUtilities
 
 // swiftlint:disable multiline_arguments_brackets
 class LoggerTests: XCTestCase {
@@ -23,8 +23,8 @@ class LoggerTests: XCTestCase {
         core = DatadogCoreProxy()
     }
 
-    override func tearDown() {
-        core.flushAndTearDown()
+    override func tearDownWithError() throws {
+        try core.flushAndTearDown()
         core = nil
         super.tearDown()
     }
@@ -357,6 +357,55 @@ class LoggerTests: XCTestCase {
         logMatchers[2].assertValue(forKey: "usr.bool", equals: true)
 
         logMatchers[3].assertUserInfo(equals: nil)
+    }
+
+    // MARK: - Sending account info
+
+    func testSendingAccountInfo() throws {
+        core.context = .mockWith(
+            userInfo: .empty
+        )
+
+        let feature: LogsFeature = .mockAny()
+        try core.register(feature: feature)
+
+        let logger = Logger.create(in: core)
+
+        logger.debug("message with no account info")
+
+        core.context.accountInfo = AccountInfo(id: "abc-123", name: "Foo", extraInfo: [:])
+        logger.debug("message with account `id` and `name`")
+
+        core.context.accountInfo = AccountInfo(
+            id: "abc-123",
+            name: "Foo",
+            extraInfo: [
+                "str": "value",
+                "int": 11_235,
+                "bool": true
+            ]
+        )
+        logger.debug("message with account `id`, `name` and `extraInfo`")
+
+        core.context.accountInfo = nil
+        logger.debug("message with no account info")
+
+        let logMatchers = try core.waitAndReturnLogMatchers()
+        logMatchers[0].assertAccountInfo(equals: nil)
+
+        logMatchers[1].assertAccountInfo(equals: (id: "abc-123", name: "Foo"))
+
+        logMatchers[2].assertAccountInfo(
+            equals: (
+                id: "abc-123",
+                name: "Foo"
+            )
+        )
+        logMatchers[2].assertValue(forKey: "account.str", equals: "value")
+        logMatchers[2].assertValue(forKey: "account.int", equals: 11_235)
+        logMatchers[2].assertValue(forKey: "account.bool", equals: true)
+
+        logMatchers[3].assertAccountInfo(equals: nil)
     }
 
     // MARK: - Sending carrier info

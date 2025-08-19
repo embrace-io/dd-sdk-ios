@@ -39,16 +39,6 @@ internal class SessionEndedMetric {
         static let rseKey = "rse"
     }
 
-    /// Represents the type of instrumentation used to start a view.
-    internal enum ViewInstrumentationType: String, Encodable {
-        /// View was started manually through `RUMMonitor.shared().startView()` API.
-        case manual
-        /// View was started automatically with `UIKitRUMViewsPredicate`.
-        case uikit
-        /// View was started through `trackRUMView()` SwiftUI modifier.
-        case swiftui
-    }
-
     /// An ID of the session being tracked through this metric object.
     let sessionID: RUMUUID
 
@@ -64,7 +54,7 @@ internal class SessionEndedMetric {
         let viewURL: String
         /// The type of instrumentation that started this view.
         /// It can be `nil` if view was started implicitly by RUM, which is the case for "ApplicationLaunch" and "Background" views.
-        let instrumentationType: ViewInstrumentationType?
+        let instrumentationType: InstrumentationType?
         /// The start of the view in milliseconds from from epoch.
         let startMs: Int64
         /// The duration of the view in nanoseconds.
@@ -74,7 +64,7 @@ internal class SessionEndedMetric {
 
         init(
             viewURL: String,
-            instrumentationType: ViewInstrumentationType?,
+            instrumentationType: InstrumentationType?,
             startMs: Int64,
             durationNs: Int64,
             hasReplay: Bool
@@ -96,11 +86,17 @@ internal class SessionEndedMetric {
     /// Info about the last tracked view.
     private var lastTrackedView: TrackedViewInfo?
 
+    /// Stores information about tracked actions, referencing them by their instrumentation type.
+    private var trackedActions: [String: Int] = [:]
+
     /// Tracks the number of SDK errors by their kind.
     private var trackedSDKErrors: [String: Int] = [:]
 
     /// Indicates if the session was stopped through `stopSession()` API.
     private var wasStopped = false
+
+    /// Information about the upload quality during the session.
+    private var uploadQuality: [String: Attributes.UploadQuality] = [:]
 
     /// If `RUM.Configuration.trackBackgroundEvents` was enabled for this session.
     private let tracksBackgroundEvents: Bool
@@ -146,7 +142,7 @@ internal class SessionEndedMetric {
     ///   - view: the view event to track
     ///   - instrumentationType: the type of instrumentation used to start this view (only the first value for each `view.id` is tracked; succeeding values
     ///   will be ignored so it is okay to pass value on first call and then follow with `nil` for next updates of given `view.id`)
-    func track(view: RUMViewEvent, instrumentationType: ViewInstrumentationType?) throws {
+    func track(view: RUMViewEvent, instrumentationType: InstrumentationType?) throws {
         guard view.session.id == sessionID.toRUMDataFormat else {
             throw SessionEndedMetricError.trackingViewInForeignSession(viewURL: view.view.url, sessionID: sessionID)
         }
@@ -174,29 +170,70 @@ internal class SessionEndedMetric {
         lastTrackedView = info
     }
 
+    /// Tracks information about an action that occurred during the session.
+    /// - Parameters:
+    ///   - action: the action event to track
+    ///   - instrumentationType: the type of instrumentation used to start this action
+    func track(action: RUMActionEvent, instrumentationType: InstrumentationType) {
+        guard action.session.id == sessionID.toRUMDataFormat else {
+            return
+        }
+
+        trackedActions[instrumentationType.metricKey, default: 0] += 1
+    }
+
     /// Tracks the kind of SDK error that occurred during the session.
     /// - Parameter sdkErrorKind: the kind of SDK error
     func track(sdkErrorKind: String) {
-        if let count = trackedSDKErrors[sdkErrorKind] {
-            trackedSDKErrors[sdkErrorKind] = count + 1
-        } else {
-            trackedSDKErrors[sdkErrorKind] = 1
-        }
+        trackedSDKErrors[sdkErrorKind, default: 0] += 1
     }
 
     /// Tracks an event missed due to absence of an active view.
     /// - Parameter missedEventType: the type of an event that was missed
     func track(missedEventType: MissedEventType) {
-        if let count = missedEvents[missedEventType] {
-            missedEvents[missedEventType] = count + 1
-        } else {
-            missedEvents[missedEventType] = 1
-        }
+        missedEvents[missedEventType, default: 0] += 1
     }
 
     /// Signals that the session was stopped with `stopSession()` API.
     func trackWasStopped() {
         wasStopped = true
+    }
+
+    /// Tracks the upload quality metric for aggregation.
+    ///
+    /// - Parameters:
+    ///   - attributes: The upload quality attributes
+    func track(uploadQuality attributes: [String: Encodable]) {
+        guard let track = attributes[UploadQualityMetric.track] as? String else {
+            return
+        }
+
+        let uploadQuality = self.uploadQuality[track] ?? Attributes.UploadQuality(
+            cycleCount: 0,
+            failureCount: [:],
+            blockerCount: [:]
+        )
+
+        var failureCount = uploadQuality.failureCount
+        var blockerCount = uploadQuality.blockerCount
+
+        if let failure = attributes[UploadQualityMetric.failure] as? String {
+            // Merge by incrementing values
+            failureCount.merge([failure: 1], uniquingKeysWith: +)
+        }
+
+        if let blockers = attributes[UploadQualityMetric.blockers] as? [String] {
+            // Merge by incrementing values
+            blockerCount = blockers.reduce(into: blockerCount) { count, blocker in
+                count[blocker, default: 0] += 1
+            }
+        }
+
+        self.uploadQuality[track] = Attributes.UploadQuality(
+            cycleCount: uploadQuality.cycleCount + 1,
+            failureCount: failureCount,
+            blockerCount: blockerCount
+        )
     }
 
     // MARK: - Exporting Attributes
@@ -243,6 +280,20 @@ internal class SessionEndedMetric {
         }
 
         let viewsCount: ViewsCount
+
+        struct ActionsCount: Encodable {
+            /// The number of distinct actions sent during this session.
+            let total: Int
+            /// The map of action instrumentation types to the number of actions tracked with each instrumentation.
+            let byInstrumentation: [String: Int]
+
+            enum CodingKeys: String, CodingKey {
+                case total
+                case byInstrumentation = "by_instrumentation"
+            }
+        }
+
+        let actionsCount: ActionsCount
 
         struct SDKErrorsCount: Encodable {
             /// The total number of SDK errors that occurred during the session, excluding any effects from telemetry limits
@@ -296,6 +347,24 @@ internal class SessionEndedMetric {
         /// Information on number of events missed due to absence of an active view.
         let noViewEventsCount: NoViewEventsCount
 
+        struct UploadQuality: Encodable {
+            let cycleCount: Int
+            let failureCount: [String: Int]
+            let blockerCount: [String: Int]
+
+            enum CodingKeys: String, CodingKey {
+                case cycleCount = "cycle_count"
+                case failureCount = "failure_count"
+                case blockerCount = "blocker_count"
+            }
+        }
+
+        /// Information about the upload quality during the session.
+        /// The upload quality is splitting between upload track name.
+        /// Tracks upload quality during the session, aggregating them by track name.
+        /// Each track reports its own upload quality metrics.
+        let uploadQuality: [String: UploadQuality]
+
         enum CodingKeys: String, CodingKey {
             case processType = "process_type"
             case precondition
@@ -303,9 +372,11 @@ internal class SessionEndedMetric {
             case wasStopped = "was_stopped"
             case hasBackgroundEventsTrackingEnabled = "has_background_events_tracking_enabled"
             case viewsCount = "views_count"
+            case actionsCount = "actions_count"
             case sdkErrorsCount = "sdk_errors_count"
             case ntpOffset = "ntp_offset"
             case noViewEventsCount = "no_view_events_count"
+            case uploadQuality = "upload_quality"
         }
     }
 
@@ -328,10 +399,11 @@ internal class SessionEndedMetric {
         let appLaunchViewsCount = trackedViews.values.filter({ $0.viewURL == RUMOffViewEventsHandlingRule.Constants.applicationLaunchViewURL }).count
         var byInstrumentationViewsCount: [String: Int] = [:]
         trackedViews.values.forEach {
-            if let instrumentationType = $0.instrumentationType?.rawValue {
-                byInstrumentationViewsCount[instrumentationType] = (byInstrumentationViewsCount[instrumentationType] ?? 0) + 1
+            if let instrumentationType = $0.instrumentationType {
+                byInstrumentationViewsCount[instrumentationType.metricKey, default: 0] += 1
             }
         }
+        let totalActionsCount = trackedActions.values.reduce(0, +)
         let withHasReplayCount = trackedViews.values.reduce(0, { acc, next in acc + (next.hasReplay ? 1 : 0) })
 
         // Compute SDK errors count
@@ -359,6 +431,10 @@ internal class SessionEndedMetric {
                     byInstrumentation: byInstrumentationViewsCount,
                     withHasReplay: withHasReplayCount
                 ),
+                actionsCount: .init(
+                    total: totalActionsCount,
+                    byInstrumentation: trackedActions
+                ),
                 sdkErrorsCount: .init(
                     total: totalSDKErrors,
                     byKind: top5SDKErrorsByKind
@@ -372,7 +448,8 @@ internal class SessionEndedMetric {
                     resources: missedEvents[.resource] ?? 0,
                     errors: missedEvents[.error] ?? 0,
                     longTasks: missedEvents[.longTask] ?? 0
-                )
+                ),
+                uploadQuality: uploadQuality
             )
         ]
     }
@@ -402,4 +479,15 @@ internal class SessionEndedMetric {
 private extension Int64 {
     /// Converts timestamp represented in milliseconds to nanoseconds with preventing Int64 overflow.
     var msToNs: Int64 { multipliedReportingOverflow(by: 1_000_000).partialValue }
+}
+
+extension InstrumentationType: Encodable {
+    var metricKey: String {
+        switch self {
+        case .uikit: return "uikit"
+        case .swiftuiAutomatic: return "swiftuiAutomatic"
+        case .swiftui: return "swiftui"
+        case .manual: return "manual"
+        }
+    }
 }

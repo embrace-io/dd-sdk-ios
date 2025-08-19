@@ -8,8 +8,8 @@ import Foundation
 import DatadogInternal
 
 /// A controller responsible for managing "RUM Session Ended" metrics.
-internal final class SessionEndedMetricController: SampledTelemetry {
-    /// The default sample rate for session ended metric (15%), applied in addition to the telemetry sample rate (20% by default).
+internal final class SessionEndedMetricController {
+    /// The default sample rate for "session ended" metric (15%), applied in addition to the telemetry sample rate (20% by default).
     static let defaultSampleRate: SampleRate = 15
 
     /// Dictionary to keep track of pending metrics, keyed by session ID.
@@ -29,7 +29,7 @@ internal final class SessionEndedMetricController: SampledTelemetry {
     ///    - telemetry: The telemetry endpoint used for sending metrics.
     ///    - sampleRate: The sample rate for "RUM Session Ended" metric.
 
-    init(telemetry: Telemetry, sampleRate: SampleRate = SessionEndedMetricController.defaultSampleRate) {
+    init(telemetry: Telemetry, sampleRate: SampleRate) {
         self.telemetry = telemetry
         self.sampleRate = sampleRate
     }
@@ -59,10 +59,23 @@ internal final class SessionEndedMetricController: SampledTelemetry {
     ///   - sessionID: session ID to track this view in (pass `nil` to track it for the last started session)
     func track(
         view: RUMViewEvent,
-        instrumentationType: SessionEndedMetric.ViewInstrumentationType?,
+        instrumentationType: InstrumentationType?,
         in sessionID: RUMUUID?
     ) {
         updateMetric(for: sessionID) { try $0?.track(view: view, instrumentationType: instrumentationType) }
+    }
+
+    /// Tracks the action event that occurred during the session.
+    /// - Parameters:
+    ///   - action: the action event to track
+    ///   - instrumentationType: the type of instrumentation used to start this action
+    ///   - sessionID: session ID to track this action in (pass `nil` to track it for the last started session)
+    func track(
+        action: RUMActionEvent,
+        instrumentationType: InstrumentationType,
+        in sessionID: RUMUUID?
+    ) {
+        updateMetric(for: sessionID) { $0?.track(action: action, instrumentationType: instrumentationType) }
     }
 
     /// Tracks the kind of SDK error that occurred during the session.
@@ -102,6 +115,14 @@ internal final class SessionEndedMetricController: SampledTelemetry {
             metrics[sessionID] = nil
             pendingSessionIDs.removeAll(where: { $0 == sessionID }) // O(n), but "ending the metric" is very rare event
         }
+    }
+
+    /// Tracks the upload quality metric for aggregation.
+    ///
+    /// - Parameters:
+    ///   - attributes: The upload quality attributes
+    func track(uploadQuality attributes: [String: Encodable], in sessionID: RUMUUID?) {
+        updateMetric(for: sessionID) { $0?.track(uploadQuality: attributes) }
     }
 
     private func updateMetric(for sessionID: RUMUUID?, _ mutation: (inout SessionEndedMetric?) throws -> Void) {

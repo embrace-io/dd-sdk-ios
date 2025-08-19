@@ -10,6 +10,9 @@ import DatadogInternal
 internal struct CoreContext {
     /// Provides the history of app foreground / background states.
     var applicationStateHistory: AppStateHistory?
+
+    /// Provides the current active RUM context, if any
+    var rumContext: RUMCoreContext?
 }
 
 internal final class ContextMessageReceiver: FeatureMessageReceiver {
@@ -39,6 +42,7 @@ internal final class ContextMessageReceiver: FeatureMessageReceiver {
     private func update(context: DatadogContext, from core: DatadogCoreProtocol) -> Bool {
         _context.mutate {
             $0.applicationStateHistory = context.applicationStateHistory
+            $0.rumContext = context.additionalContext(ofType: RUMCoreContext.self)
         }
 
         return true

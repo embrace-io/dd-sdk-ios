@@ -7,8 +7,9 @@
 #if os(iOS)
 import XCTest
 @_spi(Internal)
+import TestUtilities
+@_spi(Internal)
 @testable import DatadogSessionReplay
-@testable import TestUtilities
 
 class ViewTreeSnapshotBuilderTests: XCTestCase {
     func testWhenQueryingNodeRecorders_itPassesAppropriateContext() throws {
@@ -25,11 +26,19 @@ class ViewTreeSnapshotBuilderTests: XCTestCase {
         let snapshot = builder.createSnapshot(of: view, with: randomRecorderContext)
 
         // Then
-        XCTAssertEqual(snapshot.context, randomRecorderContext)
+        XCTAssertEqual(snapshot.context.applicationID, randomRecorderContext.applicationID)
+        XCTAssertEqual(snapshot.context.sessionID, randomRecorderContext.sessionID)
+        XCTAssertEqual(snapshot.context.viewID, randomRecorderContext.viewID)
+        XCTAssertEqual(snapshot.context.viewServerTimeOffset, randomRecorderContext.viewServerTimeOffset)
+        XCTAssertEqual(snapshot.context.date, randomRecorderContext.date)
 
         let queryContext = try XCTUnwrap(nodeRecorder.queryContexts.first)
         XCTAssertTrue(queryContext.coordinateSpace === view)
-        XCTAssertEqual(queryContext.recorder, randomRecorderContext)
+        XCTAssertEqual(queryContext.recorder.applicationID, randomRecorderContext.applicationID)
+        XCTAssertEqual(queryContext.recorder.sessionID, randomRecorderContext.sessionID)
+        XCTAssertEqual(queryContext.recorder.viewID, randomRecorderContext.viewID)
+        XCTAssertEqual(queryContext.recorder.viewServerTimeOffset, randomRecorderContext.viewServerTimeOffset)
+        XCTAssertEqual(queryContext.recorder.date, randomRecorderContext.date)
     }
 
     func testItAppliesServerTimeOffsetToSnapshot() {
@@ -60,11 +69,19 @@ class ViewTreeSnapshotBuilderTests: XCTestCase {
         let snapshot = builder.createSnapshot(of: view, with: randomRecorderContext)
 
         // Then
-        XCTAssertEqual(snapshot.context, randomRecorderContext)
+        XCTAssertEqual(snapshot.context.applicationID, randomRecorderContext.applicationID)
+        XCTAssertEqual(snapshot.context.sessionID, randomRecorderContext.sessionID)
+        XCTAssertEqual(snapshot.context.viewID, randomRecorderContext.viewID)
+        XCTAssertEqual(snapshot.context.viewServerTimeOffset, randomRecorderContext.viewServerTimeOffset)
+        XCTAssertEqual(snapshot.context.date, randomRecorderContext.date)
 
         let queryContext = try XCTUnwrap(additionalNodeRecorder.queryContexts.first)
         XCTAssertTrue(queryContext.coordinateSpace === view)
-        XCTAssertEqual(queryContext.recorder, randomRecorderContext)
+        XCTAssertEqual(queryContext.recorder.applicationID, randomRecorderContext.applicationID)
+        XCTAssertEqual(queryContext.recorder.sessionID, randomRecorderContext.sessionID)
+        XCTAssertEqual(queryContext.recorder.viewID, randomRecorderContext.viewID)
+        XCTAssertEqual(queryContext.recorder.viewServerTimeOffset, randomRecorderContext.viewServerTimeOffset)
+        XCTAssertEqual(queryContext.recorder.date, randomRecorderContext.date)
     }
 }
 #endif

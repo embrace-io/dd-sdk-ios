@@ -7,6 +7,8 @@
 #if os(iOS)
 import XCTest
 @_spi(Internal)
+import TestUtilities
+@_spi(Internal)
 @testable import DatadogSessionReplay
 
 class UISegmentRecorderTests: XCTestCase {
@@ -58,7 +60,7 @@ class UISegmentRecorderTests: XCTestCase {
     func testWhenSegmentHasTextPrivacyOverride() throws {
         // Given
         viewAttributes = .mock(fixture: .visible())
-        viewAttributes.overrides = .mockWith(textAndInputPrivacy: .maskAll)
+        viewAttributes.textAndInputPrivacy = .maskAll
 
         // When
         let semantics = try XCTUnwrap(recorder.semantics(of: segment, with: viewAttributes, in: .mockAny()) as? SpecificElement)

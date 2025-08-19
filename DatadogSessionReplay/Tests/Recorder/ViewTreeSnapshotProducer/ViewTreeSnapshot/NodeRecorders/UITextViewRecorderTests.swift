@@ -7,8 +7,9 @@
 #if os(iOS)
 import XCTest
 @_spi(Internal)
-@testable import DatadogSessionReplay
 @testable import TestUtilities
+@_spi(Internal)
+@testable import DatadogSessionReplay
 
 // swiftlint:disable opening_brace
 class UITextViewRecorderTests: XCTestCase {
@@ -104,7 +105,7 @@ class UITextViewRecorderTests: XCTestCase {
         textView.text = .mockRandom()
         textView.isEditable = false
         viewAttributes = .mock(fixture: .visible())
-        viewAttributes.overrides = .mockWith(textAndInputPrivacy: .maskAll)
+        viewAttributes.textAndInputPrivacy = .maskAll
 
         // When
         let semantics = try XCTUnwrap(recorder.semantics(of: textView, with: viewAttributes, in: .mockAny()) as? SpecificElement)

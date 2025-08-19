@@ -60,6 +60,9 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
     /// Number of Resources that started but not yet ended during this User Action's lifespan.
     private var activeResourcesCount: Int = 0
 
+    /// Interaction-to-Next-View metric for this view.
+    private let interactionToNextViewMetric: INVMetricTracking?
+
     /// Callback called when a `RUMActionEvent` is submitted for storage.
     private let onActionEventSent: (RUMActionEvent) -> Void
 
@@ -73,6 +76,7 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
         serverTimeOffset: TimeInterval,
         isContinuous: Bool,
         instrumentation: InstrumentationType,
+        interactionToNextViewMetric: INVMetricTracking?,
         onActionEventSent: @escaping (RUMActionEvent) -> Void
     ) {
         self.parent = parent
@@ -86,6 +90,7 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
         self.isContinuous = isContinuous
         self.lastActivityTime = startTime
         self.instrumentation = instrumentation
+        self.interactionToNextViewMetric = interactionToNextViewMetric
         self.onActionEventSent = onActionEventSent
     }
 
@@ -136,6 +141,7 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
     // MARK: - Sending RUM Events
 
     private func sendActionEvent(completionTime: Date, on command: RUMCommand?, context: DatadogContext, writer: Writer) {
+        attributes.merge(rumCommandAttributes: command?.globalAttributes)
         attributes.merge(rumCommandAttributes: command?.attributes)
 
         var frustrations: [RUMActionEvent.Action.Frustration.FrustrationType]? = nil
@@ -153,6 +159,7 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
                     sessionPrecondition: self.context.sessionPrecondition
                 )
             ),
+            account: .init(context: context),
             action: .init(
                 crash: .init(count: 0),
                 error: .init(count: errorsCount.toInt64),
@@ -196,7 +203,25 @@ internal class RUMUserActionScope: RUMScope, RUMContextProvider {
 
         if let event = dependencies.eventBuilder.build(from: actionEvent) {
             writer.write(value: event)
+
+            // Track action in session ended metric
+            dependencies.sessionEndedMetric.track(
+                action: event,
+                instrumentationType: instrumentation,
+                in: self.context.sessionID
+            )
+
             onActionEventSent(event)
+
+            if let activeViewID = self.context.activeViewID {
+                interactionToNextViewMetric?.trackAction(
+                    startTime: actionStartTime,
+                    endTime: completionTime,
+                    name: name,
+                    type: actionType,
+                    in: activeViewID
+                )
+            }
         }
     }
 

@@ -5,8 +5,8 @@
  */
 
 import XCTest
-import TestUtilities
 import DatadogInternal
+@testable import TestUtilities
 @testable import DatadogRUM
 
 class RUMUserActionScopeTests: XCTestCase {
@@ -51,7 +51,7 @@ class RUMUserActionScopeTests: XCTestCase {
     func testGivenActiveUserAction_whenViewIsStopped_itSendsUserActionEvent() throws {
         let hasReplay: Bool = .mockRandom()
         var context = self.context
-        context.baggages = try .mockSessionReplayAttributes(hasReplay: hasReplay)
+        context.set(additionalContext: SessionReplayCoreContext.HasReplay(value: hasReplay))
 
         let scope = RUMViewScope.mockWith(
             parent: parent,
@@ -312,6 +312,61 @@ class RUMUserActionScopeTests: XCTestCase {
         XCTAssertEqual(event.application.id, scope.context.rumApplicationID)
         XCTAssertEqual(event.session.id, scope.context.sessionID.toRUMDataFormat)
         XCTAssertEqual(event.session.type, .synthetics)
+        XCTAssertEqual(event.view.id, parent.context.activeViewID?.toRUMDataFormat)
+        XCTAssertEqual(event.view.url, "FooViewController")
+        XCTAssertEqual(event.view.name, "FooViewName")
+        XCTAssertEqual(event.action.id, scope.actionUUID.toRUMDataFormat)
+        XCTAssertEqual(event.action.type, .swipe)
+        XCTAssertEqual(event.action.loadingTime, 1_000_000_000)
+        XCTAssertEqual(event.action.resource?.count, 0)
+        XCTAssertEqual(event.action.error?.count, 0)
+        XCTAssertEqual(event.context?.contextInfo as? [String: String], ["foo": "bar"])
+        XCTAssertEqual(event.source, .ios)
+        XCTAssertEqual(event.service, "test-service")
+        XCTAssertEqual(event.version, "test-version")
+        XCTAssertEqual(event.buildVersion, "test-build")
+        XCTAssertEqual(event.buildId, context.buildId)
+        XCTAssertEqual(event.device?.name, "device-name")
+        XCTAssertEqual(event.os?.name, "device-os")
+        XCTAssertEqual(event.synthetics?.testId, fakeSyntheticsTestId)
+        XCTAssertEqual(event.synthetics?.resultId, fakeSyntheticsResultId)
+    }
+
+    func testWhenContinuousUserActionEndsWithSessionTypeOverride() throws {
+        var currentTime: Date = .mockDecember15th2019At10AMUTC()
+        let fakeSyntheticsTestId: String = .mockRandom()
+        let fakeSyntheticsResultId: String = .mockRandom()
+        let scope = RUMUserActionScope.mockWith(
+            parent: parent,
+            dependencies: .mockWith(
+                syntheticsTest: .init(RUMSyntheticsTest(injected: nil, resultId: fakeSyntheticsResultId, testId: fakeSyntheticsTestId)),
+                sessionType: .user
+            ),
+            actionType: .swipe,
+            startTime: currentTime,
+            isContinuous: true
+        )
+
+        currentTime.addTimeInterval(1)
+
+        XCTAssertFalse(
+            scope.process(
+                command: RUMStopUserActionCommand(
+                    time: currentTime,
+                    attributes: ["foo": "bar"],
+                    actionType: .swipe,
+                    name: nil
+                ),
+                context: context,
+                writer: writer
+            )
+        )
+
+        let event = try XCTUnwrap(writer.events(ofType: RUMActionEvent.self).first)
+        XCTAssertEqual(event.date, Date.mockDecember15th2019At10AMUTC().timeIntervalSince1970.toInt64Milliseconds)
+        XCTAssertEqual(event.application.id, scope.context.rumApplicationID)
+        XCTAssertEqual(event.session.id, scope.context.sessionID.toRUMDataFormat)
+        XCTAssertEqual(event.session.type, .user)
         XCTAssertEqual(event.view.id, parent.context.activeViewID?.toRUMDataFormat)
         XCTAssertEqual(event.view.url, "FooViewController")
         XCTAssertEqual(event.view.name, "FooViewName")
@@ -866,5 +921,40 @@ class RUMUserActionScopeTests: XCTestCase {
 
         let event = try XCTUnwrap(writer.events(ofType: RUMActionEvent.self).first)
         XCTAssertNil(event.action.frustration)
+    }
+
+    // MARK: - Updating Interaction To Next View Metric
+
+    func testWhenActionEventIsSent_itTrackActionInINVMetric() throws {
+        let actionStartTime: Date = .mockDecember15th2019At10AMUTC()
+        let actionName: String = .mockRandom()
+        let actionType: RUMActionType = .tap
+
+        // Given
+        let metric = INVMetricMock()
+        let scope = RUMUserActionScope.mockWith(
+            parent: parent,
+            name: actionName,
+            actionType: actionType,
+            startTime: actionStartTime,
+            interactionToNextViewMetric: metric
+        )
+
+        // When (action is sent)
+        _ = scope.process(
+            command: RUMCommandMock(time: actionStartTime + 1),
+            context: context,
+            writer: writer
+        )
+        XCTAssertFalse(writer.events(ofType: RUMActionEvent.self).isEmpty)
+
+        // Then
+        let trackedAction = try XCTUnwrap(metric.trackedActions.first)
+        XCTAssertEqual(trackedAction.startTime, actionStartTime)
+        XCTAssertEqual(trackedAction.endTime, actionStartTime + RUMUserActionScope.Constants.discreteActionTimeoutDuration)
+        XCTAssertEqual(trackedAction.actionName, actionName)
+        XCTAssertEqual(trackedAction.actionType, actionType)
+        XCTAssertEqual(trackedAction.viewID, parent.context.activeViewID)
+        XCTAssertEqual(metric.trackedActions.count, 1)
     }
 }

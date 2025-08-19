@@ -48,8 +48,8 @@ class NetworkInstrumentationIntegrationTests: XCTestCase {
         )
     }
 
-    override func tearDown() {
-        core.flushAndTearDown()
+        override func tearDownWithError() throws {
+        try core.flushAndTearDown()
         core = nil
     }
 
@@ -110,7 +110,8 @@ class NetworkInstrumentationIntegrationTests: XCTestCase {
                         providerDataCount = data?.count ?? 0
                         providerExpectation.fulfill()
                         return [:]
-                })
+                    }
+                )
             ),
             in: core
         )
@@ -157,7 +158,8 @@ class NetworkInstrumentationIntegrationTests: XCTestCase {
                         providerInfo = (resp, data, err)
                         providerExpectation.fulfill()
                         return [:]
-                })
+                    }
+                )
             ),
             in: core
         )

@@ -6,8 +6,8 @@
 
 #if os(iOS)
 import XCTest
+@_spi(Internal)
 import TestUtilities
-
 @_spi(Internal)
 @testable import DatadogSessionReplay
 
@@ -131,6 +131,35 @@ class WireframesBuilderTests: XCTestCase {
         XCTAssertEqual(clip?.left, Int64(withNoOverflow: frame.width))
         XCTAssertNil(clip?.bottom)
         XCTAssertNil(clip?.right)
+    }
+
+    func testCreateShapeWireframe_withNaNValues_filtersNaNProperties() {
+        // Given
+        let builder = WireframesBuilder()
+        let frame = CGRect(x: 0, y: 0, width: 100, height: 50)
+        let clip = frame
+        let backgroundColor = UIColor.red.cgColor
+        let nanCornerRadius: CGFloat = .nan
+        let nanOpacity: CGFloat = .nan
+
+        // When
+        let wireframe = builder.createShapeWireframe(
+            id: 1,
+            frame: frame,
+            clip: clip,
+            backgroundColor: backgroundColor,
+            cornerRadius: nanCornerRadius,
+            opacity: nanOpacity
+        )
+
+        // Then
+        guard case let .shapeWireframe(shapeWireframe) = wireframe else {
+            return XCTFail("Expected shapeWireframe")
+        }
+
+        XCTAssertNotNil(shapeWireframe.shapeStyle?.backgroundColor, "backgroundColor should not be nil")
+        XCTAssertNil(shapeWireframe.shapeStyle?.cornerRadius, "NaN cornerRadius should be filtered to nil")
+        XCTAssertNil(shapeWireframe.shapeStyle?.opacity, "NaN opacity should be filtered to nil")
     }
 }
 #endif

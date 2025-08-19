@@ -73,6 +73,16 @@
     config.uiKitActionsPredicate = actionsPredicate;
     XCTAssertIdentical(config.uiKitActionsPredicate, actionsPredicate);
 
+    XCTAssertNil(config.swiftUIViewsPredicate);
+    DDDefaultSwiftUIRUMViewsPredicate *swiftUIViewsPredicate = [DDDefaultSwiftUIRUMViewsPredicate new];
+    config.swiftUIViewsPredicate = swiftUIViewsPredicate;
+    XCTAssertIdentical(config.swiftUIViewsPredicate, swiftUIViewsPredicate);
+
+    XCTAssertNil(config.swiftUIActionsPredicate);
+    DDDefaultSwiftUIRUMActionsPredicate *swiftUIActionsPredicate = [[DDDefaultSwiftUIRUMActionsPredicate alloc] initWithIsLegacyDetectionEnabled:YES];
+    config.swiftUIActionsPredicate = swiftUIActionsPredicate;
+    XCTAssertIdentical(config.swiftUIActionsPredicate, swiftUIActionsPredicate);
+
     DDRUMURLSessionTracking *urlSessionTracking = [DDRUMURLSessionTracking new];
     DDRUMFirstPartyHostsTracing *tracing;
     tracing = [[DDRUMFirstPartyHostsTracing alloc] initWithHosts:[NSSet new] sampleRate:20];
@@ -134,6 +144,10 @@
     XCTAssertNil(config.customEndpoint);
     config.customEndpoint = [NSURL new];
     XCTAssertNotNil(config.customEndpoint);
+
+    XCTAssertTrue(config.trackAnonymousUser);
+    config.trackAnonymousUser = NO;
+    XCTAssertFalse(config.trackAnonymousUser);
 }
 
 #pragma clang diagnostic pop

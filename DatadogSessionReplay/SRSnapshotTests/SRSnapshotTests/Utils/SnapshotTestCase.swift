@@ -6,6 +6,7 @@
 
 import XCTest
 import SRFixtures
+import DatadogInternal
 import TestUtilities
 @_spi(Internal)
 @testable import DatadogSessionReplay
@@ -22,7 +23,7 @@ internal class SnapshotTestCase: XCTestCase {
 
     /// Shows view controller for given fixture in full screen.
     @discardableResult
-    func show(fixture: Fixture, with privacyTags: [PrivacyTag] = []) -> UIViewController? {
+    func show(fixture: any FixtureProtocol, with privacyTags: [PrivacyTag] = []) -> UIViewController? {
         let expectation = self.expectation(description: "Wait for view controller being shown")
 
         var viewController: UIViewController?
@@ -44,9 +45,10 @@ internal class SnapshotTestCase: XCTestCase {
         return viewController
     }
 
+    // swiftlint:disable function_default_parameter_at_end
     /// Helper method for most snapshot tests
     func takeSnapshotFor(
-        _ fixture: Fixture,
+        _ fixture: any FixtureProtocol,
         with textAndInputPrivacyLevels: [TextAndInputPrivacyLevel] = [defaultTextAndInputPrivacyLevel],
         imagePrivacyLevel: ImagePrivacyLevel = defaultImagePrivacyLevel,
         privacyTags: [PrivacyTag] = [],
@@ -72,6 +74,7 @@ internal class SnapshotTestCase: XCTestCase {
             )
         }
     }
+    // swiftlint:enable function_default_parameter_at_end
 
     /// Helper method for date and time picker snapshot tests
     func takeSnapshotForPicker(
@@ -99,6 +102,7 @@ internal class SnapshotTestCase: XCTestCase {
         }
     }
 
+    // swiftlint:disable function_default_parameter_at_end
     /// Helper method for snapshot tests showing PopupsViewController
     func takeSnapshotForPopup(
         fixture: Fixture,
@@ -123,6 +127,7 @@ internal class SnapshotTestCase: XCTestCase {
             )
         }
     }
+    // swiftlint:enable function_default_parameter_at_end
 
     /// Captures side-by-side snapshot of the app UI and recorded wireframes.
     func takeSnapshot(
@@ -143,7 +148,7 @@ internal class SnapshotTestCase: XCTestCase {
             recordWriter: RecordWriter(core: PassthroughCoreMock()),
             resourceProcessor: resourceProcessor,
             srContextPublisher: SRContextPublisher(core: PassthroughCoreMock()),
-            telemetry: TelemetryMock()
+            telemetry: NOPTelemetry()
         )
 
         let recorder = try Recorder(
@@ -175,7 +180,9 @@ internal class SnapshotTestCase: XCTestCase {
                 applicationID: "",
                 sessionID: "",
                 viewID: "",
-                viewServerTimeOffset: 0
+                viewServerTimeOffset: 0,
+                date: Date(),
+                telemetry: NOPTelemetry()
             )
         )
 

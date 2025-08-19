@@ -62,7 +62,13 @@ class TracingURLSessionHandlerTests: XCTestCase {
                 .b3,
                 .b3multi,
                 .tracecontext
-            ]
+            ],
+            networkContext: NetworkContext(
+                rumContext: .init(
+                    applicationID: .mockRandom(),
+                    sessionID: "abcdef01-2345-6789-abcd-ef0123456789"
+                )
+            )
         )
 
         XCTAssertEqual(request.value(forHTTPHeaderField: TracingHTTPHeaders.traceIDField), "100")
@@ -116,7 +122,13 @@ class TracingURLSessionHandlerTests: XCTestCase {
                 .b3,
                 .b3multi,
                 .tracecontext
-            ]
+            ],
+            networkContext: NetworkContext(
+                rumContext: .init(
+                    applicationID: .mockRandom(),
+                    sessionID: "abcdef01-2345-6789-abcd-ef0123456789"
+                )
+            )
         )
 
         XCTAssertEqual(request.value(forHTTPHeaderField: TracingHTTPHeaders.traceIDField), "custom")
@@ -152,7 +164,13 @@ class TracingURLSessionHandlerTests: XCTestCase {
                 .b3,
                 .b3multi,
                 .tracecontext
-            ]
+            ],
+            networkContext: NetworkContext(
+                rumContext: .init(
+                    applicationID: .mockRandom(),
+                    sessionID: "abcdef01-2345-6789-abcd-ef0123456789"
+                )
+            )
         )
 
         XCTAssertNil(request.value(forHTTPHeaderField: TracingHTTPHeaders.traceIDField))
@@ -189,7 +207,13 @@ class TracingURLSessionHandlerTests: XCTestCase {
                 .b3,
                 .b3multi,
                 .tracecontext
-            ]
+            ],
+            networkContext: NetworkContext(
+                rumContext: .init(
+                    applicationID: .mockRandom(),
+                    sessionID: "abcdef01-2345-6789-abcd-ef0123456789"
+                )
+            )
         )
 
         span.finish()
@@ -214,7 +238,8 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenFirstPartyInterceptionWithSpanContext_whenInterceptionCompletes_itUsesInjectedSpanContext() throws {
-        core.expectation = expectation(description: "Send span")
+        let expectation = expectation(description: "Send span")
+        core.onEventWriteContext = { _ in expectation.fulfill() }
         let sampleRate: Float = .mockRandom(min: 1, max: 100)
         let isKept: Bool = .mockRandom()
 
@@ -237,7 +262,8 @@ class TracingURLSessionHandlerTests: XCTestCase {
             spanID: 200,
             parentSpanID: nil,
             sampleRate: sampleRate,
-            isKept: isKept
+            isKept: isKept,
+            rumSessionId: nil
         ))
 
         // When
@@ -259,7 +285,8 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenFirstPartyInterceptionWithNoError_whenInterceptionCompletes_itEncodesRequestInfoInSpan() throws {
-        core.expectation = expectation(description: "Send span")
+        let expectation = expectation(description: "Send span")
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let request: ImmutableRequest = .mockWith(httpMethod: "POST")
@@ -294,8 +321,9 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenFirstPartyIncompleteInterception_whenInterceptionCompletes_itDoesNotSendTheSpan() throws {
-        core.expectation = expectation(description: "Do not send span")
-        core.expectation?.isInverted = true
+        let expectation = expectation(description: "Do not send span")
+        expectation.isInverted = true
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let incompleteInterception = URLSessionTaskInterception(request: .mockAny(), isFirstParty: true)
@@ -310,8 +338,9 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenThirdPartyInterception_whenInterceptionCompletes_itDoesNotSendTheSpan() throws {
-        core.expectation = expectation(description: "Do not send span")
-        core.expectation?.isInverted = true
+        let expectation = expectation(description: "Do not send span")
+        expectation.isInverted = true
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let interception = URLSessionTaskInterception(request: .mockAny(), isFirstParty: false)
@@ -334,8 +363,9 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testRUM2APMInterception_whenInterceptionCompletes_itDoesNotSendTheSpan() throws {
-        core.expectation = expectation(description: "Do not send span")
-        core.expectation?.isInverted = true
+        let expectation = expectation(description: "Do not send span")
+        expectation.isInverted = true
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let request: ImmutableRequest = .mockWith(
@@ -353,7 +383,8 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenAnyInterception_itAddsAppStateInformationToSpan() throws {
-        core.expectation = expectation(description: "Send span")
+        let expectation = expectation(description: "Send span")
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let interception = URLSessionTaskInterception(request: .mockAny(), isFirstParty: true)
@@ -379,8 +410,9 @@ class TracingURLSessionHandlerTests: XCTestCase {
     }
 
     func testGivenRejectingHandler_itDoesNotRecordSpan() throws {
-        core.expectation = expectation(description: "Do not send span")
-        core.expectation?.isInverted = true
+        let expectation = expectation(description: "Do not send span")
+        expectation.isInverted = true
+        core.onEventWriteContext = { _ in expectation.fulfill() }
 
         // Given
         let receiver = ContextMessageReceiver()

@@ -95,6 +95,44 @@ class DDRUMUserActionTypeTests: XCTestCase {
     }
 }
 
+class SwiftUIRUMViewsPredicateBridgeTests: XCTestCase {
+    func testItForwardsCallToObjcPredicate() {
+        class MockPredicate: DDSwiftUIRUMViewsPredicate {
+            var didCallRUMView = false
+            func rumView(for extractedViewName: String) -> DDRUMView? {
+                didCallRUMView = true
+                return nil
+            }
+        }
+
+        let objcPredicate = MockPredicate()
+
+        let predicateBridge = SwiftUIRUMViewsPredicateBridge(objcPredicate: objcPredicate)
+        _ = predicateBridge.rumView(for: "TestView")
+
+        XCTAssertTrue(objcPredicate.didCallRUMView)
+    }
+}
+
+class SwiftUIRUMActionsPredicateBridgeTests: XCTestCase {
+    func testItForwardsCallToObjcPredicate() {
+        class MockPredicate: DDSwiftUIRUMActionsPredicate {
+            var didCallRUMAction = false
+            func rumAction(with componentName: String) -> DDRUMAction? {
+                didCallRUMAction = true
+                return nil
+            }
+        }
+
+        let objcPredicate = MockPredicate()
+
+        let predicateBridge = SwiftUIRUMActionsPredicateBridge(objcPredicate: objcPredicate)
+        _ = predicateBridge.rumAction(with: "Button")
+
+        XCTAssertTrue(objcPredicate.didCallRUMAction)
+    }
+}
+
 class DDRUMErrorSourceTests: XCTestCase {
     func testMappingToSwiftRUMErrorSource() {
         XCTAssertEqual(DDRUMErrorSource.source.swiftType, .source)
@@ -146,8 +184,8 @@ class DDRUMMonitorTests: XCTestCase {
         config = RUM.Configuration(applicationID: .mockAny())
     }
 
-    override func tearDown() {
-        core.flushAndTearDown()
+        override func tearDownWithError() throws {
+        try core.flushAndTearDown()
         config = nil
         CoreRegistry.unregisterDefault()
         core = nil
@@ -437,6 +475,28 @@ class DDRUMMonitorTests: XCTestCase {
         XCTAssertEqual(try viewEvents[0].attribute(forKeyPath: "context.global-attribute1"), "foo1")
         XCTAssertNil(try? viewEvents[0].attribute(forKeyPath: "context.global-attribute2") as String)
         XCTAssertEqual(try viewEvents[0].attribute(forKeyPath: "context.event-attribute1"), "foo1")
+    }
+
+    func testSendingMultipleGlobalAttributes() throws {
+        RUM.enable(with: config)
+        let objcRUMMonitor = DDRUMMonitor.shared()
+
+        objcRUMMonitor.addAttributes(["global-attribute1": "foo1", "global-attribute2": "foo2", "global-attribute3": 2, "global-attribute4": true])
+        objcRUMMonitor.removeAttribute(forKey: "global-attribute2")
+
+        objcRUMMonitor.startView(viewController: mockView, name: .mockAny(), attributes: [:])
+
+        let rumEventMatchers = try core.waitAndReturnRUMEventMatchers()
+
+        let viewEvents = rumEventMatchers.filterRUMEvents(ofType: RUMViewEvent.self) { event in
+            return event.view.name != RUMOffViewEventsHandlingRule.Constants.applicationLaunchViewName
+        }
+        XCTAssertEqual(viewEvents.count, 1)
+
+        XCTAssertEqual(try viewEvents[0].attribute(forKeyPath: "context.global-attribute1"), "foo1")
+        XCTAssertNil(try? viewEvents[0].attribute(forKeyPath: "context.global-attribute2") as String)
+        XCTAssertEqual(try viewEvents[0].attribute(forKeyPath: "context.global-attribute3"), 2)
+        XCTAssertEqual(try viewEvents[0].attribute(forKeyPath: "context.global-attribute4"), true)
     }
 
     func testEvaluatingFeatureFlags() throws {

@@ -10,8 +10,14 @@ import DatadogInternal
 @preconcurrency import CrashReporter
 
 internal extension PLCrashReporterConfig {
+    struct Constants {
+        /// The maximum number of bytes each stack trace can not exceed.
+        /// When stack trace exceeds this limit, it will throw an error.
+        static let maxReportBytes: UInt = 2 * 1_024 * 1_024 // 2MB
+    }
+
     /// `PLCR` configuration used for `DatadogCrashReporting`
-    static func ddConfiguration() throws -> PLCrashReporterConfig {
+    static func ddConfiguration(maxReportBytes: UInt = Constants.maxReportBytes) throws -> PLCrashReporterConfig {
         let version = "v1"
 
         guard let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
@@ -26,19 +32,40 @@ internal extension PLCrashReporterConfig {
             signalHandlerType: .BSD,
             // We don't symbolicate on device. All symbolication will happen backend-side.
             symbolicationStrategy: [],
+            // Flag indicating if the uncaughtExceptionHandler should be initialized or not. It usually is, except in a Xamarin environment.
+            shouldRegisterUncaughtExceptionHandler: true,
             // Set a custom path to avoid conflicts with other PLC instances
-            basePath: directory.path
+            basePath: directory.path,
+            // Set the maximum number of bytes if the crash report exceeds MAX_REPORT_BYTES
+            maxReportBytes: maxReportBytes
         )
     }
+
+    static var liveReportConfiguration = PLCrashReporterConfig(
+        signalHandlerType: .BSD, // no effect on Live Report
+        symbolicationStrategy: [],
+        shouldRegisterUncaughtExceptionHandler: false, // no effect on Live Report
+        basePath: nil, // Live Report uses /tmp folder always
+        maxReportBytes: Constants.maxReportBytes
+    )
 }
 
 internal final class PLCrashReporterIntegration: ThirdPartyCrashReporter {
     private let crashReporter: PLCrashReporter
+    private let backtraceReporter: PLCrashReporter
     private let builder = DDCrashReportBuilder()
 
     init() throws {
         self.crashReporter = try PLCrashReporter(configuration: .ddConfiguration())
         try crashReporter.enableAndReturnError()
+
+        // Secondary instance for collecting Live Report for backtraces to prevent
+        // race condition while accessing customData: PLCrashReporter's customData
+        // is not thread-safe and is actually not needed for backtraces.
+        //
+        // This secondary instance doesn't need to and should not be enabled as it
+        // will conflict with the primary one.
+        self.backtraceReporter = PLCrashReporter(configuration: .liveReportConfiguration)
     }
 
     func hasPendingCrashReport() -> Bool {
@@ -61,7 +88,7 @@ internal final class PLCrashReporterIntegration: ThirdPartyCrashReporter {
     }
 
     func generateBacktrace(threadID: ThreadID) throws -> BacktraceReport {
-        let liveReportData = crashReporter.generateLiveReport(withThread: threadID)
+        let liveReportData = try backtraceReporter.generateLiveReport(withThread: threadID, exception: nil)
         let liveReport = try PLCrashReport(data: liveReportData)
 
         // This is quite opportunistic - we map PLCR's live report through existing `DDCrashReport` builder to

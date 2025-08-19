@@ -18,6 +18,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: UIKitRUMViewsPredicateMock(),
             uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
             longTaskThreshold: nil,
             appHangThreshold: .mockAny(),
             mainQueue: .main,
@@ -46,6 +48,65 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: nil,
             uiKitRUMActionsPredicate: UIKitRUMActionsPredicateMock(),
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
+            longTaskThreshold: nil,
+            appHangThreshold: .mockAny(),
+            mainQueue: .main,
+            dateProvider: SystemDateProvider(),
+            backtraceReporter: BacktraceReporterMock(),
+            fatalErrorContext: FatalErrorContextNotifierMock(),
+            processID: .mockAny(),
+            notificationCenter: .default,
+            watchdogTermination: .mockRandom(),
+            memoryWarningMonitor: .mockRandom()
+        )
+
+        // Then
+        withExtendedLifetime(instrumentation) {
+            DDAssertActiveSwizzlings(["sendEvent:"])
+            XCTAssertNil(instrumentation.longTasks)
+        }
+    }
+
+    func testWhenOnlySwiftUIViewsPredicateIsConfigured_itInstrumentsUIViewController() throws {
+        // When
+        let instrumentation = RUMInstrumentation(
+            featureScope: NOPFeatureScope(),
+            uiKitRUMViewsPredicate: nil,
+            uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: SwiftUIRUMViewsPredicateMock(),
+            swiftUIRUMActionsPredicate: nil,
+            longTaskThreshold: nil,
+            appHangThreshold: .mockAny(),
+            mainQueue: .main,
+            dateProvider: SystemDateProvider(),
+            backtraceReporter: BacktraceReporterMock(),
+            fatalErrorContext: FatalErrorContextNotifierMock(),
+            processID: .mockAny(),
+            notificationCenter: .default,
+            watchdogTermination: .mockRandom(),
+            memoryWarningMonitor: .mockRandom()
+        )
+
+        // Then
+        withExtendedLifetime(instrumentation) {
+            DDAssertActiveSwizzlings([
+                "viewDidAppear:",
+                "viewDidDisappear:",
+            ])
+            XCTAssertNil(instrumentation.longTasks)
+        }
+    }
+
+    func testWhenOnlySwiftUIActionsPredicateIsConfigured_itInstrumentsUIApplication() throws {
+        // When
+        let instrumentation = RUMInstrumentation(
+            featureScope: NOPFeatureScope(),
+            uiKitRUMViewsPredicate: nil,
+            uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: SwiftUIRUMActionsPredicateMock(),
             longTaskThreshold: nil,
             appHangThreshold: .mockAny(),
             mainQueue: .main,
@@ -71,6 +132,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: nil,
             uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
             longTaskThreshold: 0.5,
             appHangThreshold: .mockAny(),
             mainQueue: .main,
@@ -99,6 +162,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: nil,
             uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
             longTaskThreshold: .mockRandom(min: -100, max: 0),
             appHangThreshold: .mockAny(),
             mainQueue: .main,
@@ -123,6 +188,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: nil,
             uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
             longTaskThreshold: .mockRandom(min: -100, max: 0),
             appHangThreshold: 2,
             mainQueue: .main,
@@ -147,6 +214,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: nil,
             uiKitRUMActionsPredicate: nil,
+            swiftUIRUMViewsPredicate: nil,
+            swiftUIRUMActionsPredicate: nil,
             longTaskThreshold: .mockRandom(min: -100, max: 0),
             appHangThreshold: nil,
             mainQueue: .main,
@@ -171,6 +240,8 @@ class RUMInstrumentationTests: XCTestCase {
             featureScope: NOPFeatureScope(),
             uiKitRUMViewsPredicate: UIKitRUMViewsPredicateMock(),
             uiKitRUMActionsPredicate: UIKitRUMActionsPredicateMock(),
+            swiftUIRUMViewsPredicate: SwiftUIRUMViewsPredicateMock(),
+            swiftUIRUMActionsPredicate: SwiftUIRUMActionsPredicateMock(),
             longTaskThreshold: 0.5,
             appHangThreshold: 2,
             mainQueue: .main,

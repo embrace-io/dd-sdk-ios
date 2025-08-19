@@ -95,23 +95,18 @@ internal class OTelSpanBuilder: OpenTelemetryApi.SpanBuilder {
         return self
     }
 
-    func withActiveSpan<T>(_ operation: (any OpenTelemetryApi.SpanBase) throws -> T) rethrows -> T {
-        let span = self.startSpan()
-        defer {
-            span.end()
-        }
-        return try operation(span)
-    }
-
-    func withActiveSpan<T>(_ operation: (any OpenTelemetryApi.SpanBase) async throws -> T) async rethrows -> T {
-        let span = self.startSpan()
-        defer {
-            span.end()
-        }
-        return try await operation(span)
-    }
-
     func startSpan() -> OpenTelemetryApi.Span {
+        let createdSpan = prepareSpan()
+
+        if active {
+            OpenTelemetry.instance.contextProvider.setActiveSpan(createdSpan)
+            createdSpan.ddSpan.setActive()
+        }
+
+        return createdSpan
+    }
+
+    private func prepareSpan() -> OTelSpan {
         let parentContext = parent.context()
         let traceId: TraceId
         let spanId = SpanId.random()
@@ -147,12 +142,6 @@ internal class OTelSpanBuilder: OpenTelemetryApi.SpanBuilder {
             eventBuilder: tracer.spanEventBuilder,
             eventWriter: writer
         )
-
-        if active {
-            OpenTelemetry.instance.contextProvider.setActiveSpan(createdSpan)
-            createdSpan.ddSpan.setActive()
-        }
-
         return createdSpan
     }
 
@@ -160,4 +149,24 @@ internal class OTelSpanBuilder: OpenTelemetryApi.SpanBuilder {
         attributes[key] = value
         return self
     }
+
+    func withActiveSpan<T>(_ operation: (any OpenTelemetryApi.SpanBase) throws -> T) rethrows -> T {
+        let createdSpan = self.prepareSpan()
+        defer { createdSpan.end() }
+        return try OpenTelemetry.instance.contextProvider.withActiveSpan(createdSpan) {
+            try operation(createdSpan)
+        }
+    }
+
+#if canImport(_Concurrency)
+    /// Ref.: https://github.com/open-telemetry/opentelemetry-swift/issues/578
+    @available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
+    func withActiveSpan<T>(_ operation: (any OpenTelemetryApi.SpanBase) async throws -> T) async rethrows -> T {
+        let createdSpan = self.prepareSpan()
+        defer { createdSpan.end() }
+        return try await OpenTelemetry.instance.contextProvider.withActiveSpan(createdSpan) {
+            try await operation(createdSpan)
+        }
+    }
+#endif
 }

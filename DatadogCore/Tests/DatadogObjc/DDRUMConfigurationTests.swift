@@ -6,6 +6,7 @@
 
 import XCTest
 import TestUtilities
+import DatadogInternal
 @testable import DatadogRUM
 @testable import DatadogObjc
 
@@ -130,7 +131,7 @@ class DDRUMConfigurationTests: XCTestCase {
     func testEventMappers() {
         let swiftViewEvent: RUMViewEvent = .mockRandom()
         let swiftResourceEvent: RUMResourceEvent = .mockRandom()
-        let swiftActionEvent: RUMActionEvent = .mockRandom()
+        let swiftActionEvent: RUMActionEvent = .mockAny()
         let swiftErrorEvent: RUMErrorEvent = .mockRandom()
         let swiftLongTaskEvent: RUMLongTaskEvent = .mockRandom()
 

@@ -6,9 +6,10 @@
 
 #if os(iOS)
 import XCTest
-import TestUtilities
 import DatadogInternal
 
+@_spi(Internal)
+import TestUtilities
 @_spi(Internal)
 @testable import DatadogSessionReplay
 
@@ -147,11 +148,11 @@ class SegmentJSONTests: XCTestCase {
             textAndInputPrivacy: .mockRandom(),
             imagePrivacy: .mockRandom(),
             touchPrivacy: .mockRandom(),
-            rumContext: RUMContext(
+            rumContext: .mockWith(
                 applicationID: segment.application.id,
                 sessionID: segment.session.id,
                 viewID: segment.view.id,
-                viewServerTimeOffset: 0
+                serverTimeOffset: 0
             )
         )
 
