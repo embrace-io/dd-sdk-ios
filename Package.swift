@@ -3,7 +3,7 @@
 import PackageDescription
 import Foundation
 
-let opentelemetry = (name: "opentelemetry-swift-core", url: "https://github.com/open-telemetry/opentelemetry-swift-core.git")
+let opentelemetry = (name: "opentelemetry-swift", url: "https://github.com/open-telemetry/opentelemetry-swift.git")
 
 let internalSwiftSettings: [SwiftSetting] = ProcessInfo.processInfo.environment["DD_BENCHMARK"] != nil ?
     [.define("DD_BENCHMARK")] : []
@@ -52,7 +52,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/microsoft/plcrashreporter.git", from: "1.12.0"),
-        .package(url: opentelemetry.url, from: "2.1.1"),
+        .package(url: opentelemetry.url, from: "2.0.2"),
     ],
     targets: [
         .target(
