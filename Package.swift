@@ -52,7 +52,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/microsoft/plcrashreporter.git", from: "1.12.0"),
-        .package(url: opentelemetry.url, exact: "2.0.0"),
+        .package(url: opentelemetry.url, from: "2.0.2"),
     ],
     targets: [
         .target(
